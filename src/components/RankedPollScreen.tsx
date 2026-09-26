@@ -44,6 +44,7 @@ type Props = {
   onVote: (
     orderedOptions: PollOption[]
   ) => void;
+  onShare: () => void;
 };
 
 type SortableOptionProps = {
@@ -120,6 +121,7 @@ export default function RankedPollScreen({
   results,
   setScreen,
   onVote,
+  onShare,
 }: Props) {
   const [
     orderedOptions,
@@ -144,6 +146,7 @@ export default function RankedPollScreen({
           },
         }
       ),
+
       useSensor(
         TouchSensor,
         {
@@ -287,6 +290,13 @@ export default function RankedPollScreen({
               ? "Отправляем..."
               : "Проголосовать"}
           </button>
+
+          <button
+            className="secondary"
+            onClick={onShare}
+          >
+            📤 Поделиться голосованием
+          </button>
         </>
       ) : (
         <>
@@ -336,6 +346,13 @@ export default function RankedPollScreen({
             высокое место даёт
             больше баллов.
           </p>
+
+          <button
+            className="secondary"
+            onClick={onShare}
+          >
+            📤 Поделиться голосованием
+          </button>
         </>
       )}
     </main>
