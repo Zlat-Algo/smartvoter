@@ -30,6 +30,7 @@ import type {
   PollOption,
   Screen,
   VotingMethod,
+  ResultsVisibility,
 } from "./types/poll";
 
 type RankedResult = {
@@ -53,6 +54,15 @@ export default function App() {
 
   const [votingMethod, setVotingMethod] =
     useState<VotingMethod>("plurality");
+
+  const [resultsVisibility, setResultsVisibility] =
+    useState<ResultsVisibility>("always");
+
+  const [endsAt, setEndsAt] =
+    useState<string | null>(null);
+
+  const [now, setNow] =
+    useState(Date.now());
 
   const [voteCounts, setVoteCounts] =
     useState<Record<string, number>>({});
@@ -78,6 +88,20 @@ export default function App() {
   const telegramName =
     getTelegramUserName();
 
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 30000);
+
+    return () => {
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const pollExpired =
+    endsAt !== null &&
+    new Date(endsAt).getTime() <= now;
+
   const openPollById = async (
     pollId: string
   ) => {
@@ -100,12 +124,21 @@ export default function App() {
       );
 
       const method: VotingMethod =
-        result.poll
-          .voting_method === "ranked"
+        result.poll.voting_method ===
+        "ranked"
           ? "ranked"
           : "plurality";
 
       setVotingMethod(method);
+
+      setResultsVisibility(
+        result.poll.results_visibility ||
+          "always"
+      );
+
+      setEndsAt(
+        result.poll.ends_at || null
+      );
 
       if (method === "plurality") {
         const results =
@@ -122,9 +155,7 @@ export default function App() {
               telegramUserId
             );
 
-          setVoted(
-            alreadyVoted
-          );
+          setVoted(alreadyVoted);
         } else {
           setVoted(false);
         }
@@ -152,9 +183,7 @@ export default function App() {
               telegramUserId
             );
 
-          setVoted(
-            alreadyVoted
-          );
+          setVoted(alreadyVoted);
         } else {
           setVoted(false);
         }
@@ -187,7 +216,9 @@ export default function App() {
   const handleCreatePoll = async (
     pollTitle: string,
     options: string[],
-    method: VotingMethod
+    method: VotingMethod,
+    visibility: ResultsVisibility,
+    expiration: string | null
   ) => {
     if (!telegramUserId) {
       alert(
@@ -205,7 +236,9 @@ export default function App() {
           pollTitle,
           options,
           telegramUserId,
-          method
+          method,
+          visibility,
+          expiration
         );
 
       setCreatedPollId(
@@ -222,6 +255,14 @@ export default function App() {
 
       setVotingMethod(
         method
+      );
+
+      setResultsVisibility(
+        visibility
+      );
+
+      setEndsAt(
+        expiration
       );
 
       setVoteCounts({});
@@ -305,6 +346,14 @@ export default function App() {
       return;
     }
 
+    if (pollExpired) {
+      alert(
+        "Это голосование уже завершено."
+      );
+
+      return;
+    }
+
     if (voted) {
       alert(
         "Вы уже голосовали!"
@@ -375,6 +424,14 @@ export default function App() {
       if (!telegramUserId) {
         alert(
           "Не удалось определить Telegram-пользователя"
+        );
+
+        return;
+      }
+
+      if (pollExpired) {
+        alert(
+          "Это голосование уже завершено."
         );
 
         return;
@@ -474,6 +531,11 @@ export default function App() {
       0
     );
 
+  const showResults =
+    resultsVisibility === "always" ||
+    voted ||
+    pollExpired;
+
   if (screen === "create") {
     return (
       <CreatePoll
@@ -492,24 +554,30 @@ export default function App() {
   ) {
     return (
       <RankedPollScreen
-  title={title}
-  options={pollOptions}
-  voted={voted}
-  loading={loading}
-  totalVoters={
-    totalRankedVoters
-  }
-  results={
-    rankedResults
-  }
-  setScreen={setScreen}
-  onVote={
-    handleRankedVote
-  }
-  onShare={
-    handleShare
-  }
-/>
+        title={title}
+        options={pollOptions}
+        voted={voted}
+        loading={loading}
+        totalVoters={
+          totalRankedVoters
+        }
+        results={
+          rankedResults
+        }
+        showResults={
+          showResults
+        }
+        pollExpired={
+          pollExpired
+        }
+        setScreen={setScreen}
+        onVote={
+          handleRankedVote
+        }
+        onShare={
+          handleShare
+        }
+      />
     );
   }
 
@@ -529,6 +597,12 @@ export default function App() {
         }
         voted={voted}
         loading={loading}
+        showResults={
+          showResults
+        }
+        pollExpired={
+          pollExpired
+        }
         setScreen={setScreen}
         onVote={handleVote}
         onShare={handleShare}
