@@ -8,9 +8,7 @@ import type {
 
 type Props = {
   loading: boolean;
-  setScreen: (
-    screen: Screen
-  ) => void;
+  setScreen: (screen: Screen) => void;
   onCreate: (
     title: string,
     options: string[],
@@ -22,16 +20,13 @@ type Props = {
 };
 
 const titleExamples = [
-  "Куда пойдём после школы?",
-  "Как назовём команду?",
-  "Кто станет админом?",
-  "Что посмотрим вечером?",
-  "Какой вариант выбрать?",
-  "Где проведём встречу?",
-  "Что будем делать на выходных?",
-  "Какую игру запустим?",
-  "Какой фильм посмотрим?",
-  "Как лучше поступить?",
+  "Кто будет админом?",
+  "Куда пойдём сегодня?",
+  "Как лучше провести выходные?",
+  "Какой вариант выбираем?",
+  "Что будем делать дальше?",
+  "Какой фильм посмотреть?",
+  "Где устроим встречу?",
 ];
 
 export default function CreatePoll({
@@ -39,24 +34,18 @@ export default function CreatePoll({
   setScreen,
   onCreate,
 }: Props) {
-  const [
-    title,
-    setTitle,
-  ] = useState("");
+  const [title, setTitle] =
+    useState("");
 
-  const [
-    options,
-    setOptions,
-  ] = useState([
-    "",
-  ]);
+  const [options, setOptions] =
+    useState([
+      "",
+    ]);
 
-  const [
-    votingMethod,
-    setVotingMethod,
-  ] = useState<VotingMethod>(
-    "plurality"
-  );
+  const [votingMethod, setVotingMethod] =
+    useState<VotingMethod>(
+      "plurality"
+    );
 
   const [
     resultsVisibility,
@@ -66,59 +55,49 @@ export default function CreatePoll({
       "always"
     );
 
-  const [
-    duration,
-    setDuration,
-  ] = useState("none");
+  const [duration, setDuration] =
+    useState("none");
 
   const [
     allowRevoting,
     setAllowRevoting,
   ] = useState(true);
 
-  const [
-    example,
-  ] = useState(
-    () =>
-      titleExamples[
-        Math.floor(
-          Math.random() *
-            titleExamples.length
-        )
-      ]
-  );
+  const randomExample =
+    titleExamples[
+      Math.floor(
+        Math.random() *
+          titleExamples.length
+      )
+    ];
 
   const updateOption = (
     index: number,
     value: string
   ) => {
-    let copy = [...options];
+    let copy = [
+      ...options,
+    ];
 
-    copy[index] = value;
+    copy[index] =
+      value;
 
     while (
       copy.length > 1 &&
       !copy[
         copy.length - 1
-      ].trim() &&
-      !copy[
-        copy.length - 2
       ].trim()
     ) {
       copy.pop();
     }
 
     if (
+      copy.length < 20 &&
       copy[
         copy.length - 1
-      ]?.trim() &&
-      copy.length < 20
+      ]?.trim()
     ) {
       copy.push("");
-    }
-
-    if (copy.length === 0) {
-      copy = [""];
     }
 
     setOptions(copy);
@@ -150,7 +129,6 @@ export default function CreatePoll({
         alert(
           "Введите название голосования"
         );
-
         return;
       }
 
@@ -169,12 +147,11 @@ export default function CreatePoll({
         alert(
           "Добавьте хотя бы один вариант"
         );
-
         return;
       }
 
       await onCreate(
-        title,
+        title.trim(),
         validOptions,
         votingMethod,
         resultsVisibility,
@@ -209,7 +186,7 @@ export default function CreatePoll({
             e.target.value
           )
         }
-        placeholder={`Например: ${example}`}
+        placeholder={`Например: ${randomExample}`}
       />
 
       <label>
@@ -250,11 +227,24 @@ export default function CreatePoll({
         🏆 Ранжирование
       </button>
 
-      <div className="mode-description">
+      <div
+        style={{
+          marginTop: 8,
+          marginBottom: 18,
+          padding:
+            "10px 12px",
+          borderRadius: 12,
+          background:
+            "rgba(128,128,128,0.08)",
+          lineHeight: 1.45,
+          fontSize: 14,
+          opacity: 0.82,
+        }}
+      >
         {votingMethod ===
         "plurality"
-          ? "Выберите один вариант."
-          : "Расставьте все варианты от самого желательного к наименее желательному."}
+          ? "Выберите один вариант ответа."
+          : "Расставьте варианты от самого желательного к наименее желательному."}
       </div>
 
       <label>
@@ -338,7 +328,7 @@ export default function CreatePoll({
       </button>
 
       <label>
-        Переголосование
+        Изменение голоса
       </label>
 
       <button
@@ -354,7 +344,7 @@ export default function CreatePoll({
           )
         }
       >
-        🔄 Разрешить переголосование
+        🔄 Можно изменить
       </button>
 
       <button
@@ -370,43 +360,64 @@ export default function CreatePoll({
           )
         }
       >
-        🔒 Запретить переголосование
+        🔒 Нельзя изменить
       </button>
 
       <label>
         Срок голосования
       </label>
 
-      <div className="duration-picker">
-        <select
-          value={duration}
-          onChange={(e) =>
-            setDuration(
-              e.target.value
-            )
-          }
-        >
-          <option value="none">
-            ♾️ Без ограничения
-          </option>
+      <select
+        value={duration}
+        onChange={(e) =>
+          setDuration(
+            e.target.value
+          )
+        }
+        style={{
+          width: "100%",
+          padding:
+            "13px 14px",
+          borderRadius: 14,
+          border:
+            "1px solid rgba(128,128,128,0.25)",
+          background:
+            "rgba(128,128,128,0.10)",
+          color:
+            "inherit",
+          fontSize: 16,
+          outline: "none",
+          marginBottom: 8,
+        }}
+      >
+        <option value="none">
+          ♾️ Без ограничения
+        </option>
 
-          <option value="1">
-            ⏱️ 1 час
-          </option>
+        <option value="1">
+          ⏱️ 1 час
+        </option>
 
-          <option value="24">
-            📅 1 день
-          </option>
+        <option value="6">
+          ⏱️ 6 часов
+        </option>
 
-          <option value="72">
-            📅 3 дня
-          </option>
+        <option value="12">
+          ⏱️ 12 часов
+        </option>
 
-          <option value="168">
-            📅 7 дней
-          </option>
-        </select>
-      </div>
+        <option value="24">
+          📅 1 день
+        </option>
+
+        <option value="72">
+          📅 3 дня
+        </option>
+
+        <option value="168">
+          📅 7 дней
+        </option>
+      </select>
 
       <button
         className="primary"
