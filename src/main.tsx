@@ -13,14 +13,11 @@ type PollOption = {
 
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
-
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
-
   const [createdPollId, setCreatedPollId] = useState<string | null>(null);
   const [pollOptions, setPollOptions] = useState<PollOption[]>([]);
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
-
   const [loading, setLoading] = useState(false);
   const [voted, setVoted] = useState(false);
 
@@ -43,7 +40,7 @@ function App() {
       .eq("poll_id", createdPollId);
 
     if (error) {
-      console.error("RESULTS ERROR:", error);
+      console.error(error);
       return;
     }
 
@@ -74,7 +71,6 @@ function App() {
     try {
       setLoading(true);
 
-      // Создаём голосование
       const { data: poll, error: pollError } = await supabase
         .from("polls")
         .insert({
@@ -84,29 +80,23 @@ function App() {
         .select()
         .single();
 
-      if (pollError) {
-        throw pollError;
-      }
+      if (pollError) throw pollError;
 
-      // Создаём варианты
-      const { data: createdOptions, error: optionsError } =
-        await supabase
-          .from("poll_options")
-          .insert(
-            validOptions.map((text, index) => ({
-              poll_id: poll.id,
-              text,
-              position: index,
-            }))
-          )
-          .select();
+      const { data: createdOptions, error: optionsError } = await supabase
+        .from("poll_options")
+        .insert(
+          validOptions.map((text, index) => ({
+            poll_id: poll.id,
+            text,
+            position: index,
+          }))
+        )
+        .select();
 
-      if (optionsError) {
-        throw optionsError;
-      }
+      if (optionsError) throw optionsError;
 
       if (!createdOptions) {
-        throw new Error("Варианты голосования не создались");
+        throw new Error("Варианты не создались");
       }
 
       setCreatedPollId(poll.id);
@@ -158,7 +148,6 @@ function App() {
         if (error.code === "23505") {
           alert("Вы уже голосовали!");
         } else {
-          console.error("VOTE ERROR:", error);
           alert(`Ошибка: ${error.message}`);
         }
 
@@ -166,13 +155,11 @@ function App() {
       }
 
       setVoted(true);
-
-      // Загружаем актуальные результаты
       await loadResults();
 
       alert("Голос принят! 🗳️");
     } catch (error: any) {
-      console.error("VOTE ERROR:", error);
+      console.error(error);
 
       alert(
         `Не удалось отправить голос:\n\n${
@@ -232,9 +219,7 @@ function App() {
           onClick={createPoll}
           disabled={loading}
         >
-          {loading
-            ? "Создаём..."
-            : "Создать голосование"}
+          {loading ? "Создаём..." : "Создать голосование"}
         </button>
       </main>
     );
@@ -309,8 +294,8 @@ function App() {
       <h1>SmartVoter</h1>
 
       <p className="subtitle">
-        Создавай голосования с продвинутыми
-        способами подсчёта голосов.
+        Создавай голосования с продвинутыми способами
+        подсчёта голосов.
       </p>
 
       <button
@@ -322,9 +307,7 @@ function App() {
 
       <button
         className="secondary"
-        onClick={() =>
-          alert("Здесь будут твои голосования")
-        }
+        onClick={() => alert("Здесь будут твои голосования")}
       >
         Мои голосования
       </button>
