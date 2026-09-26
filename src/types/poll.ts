@@ -25,8 +25,12 @@ export type Poll = {
   voting_method: string;
   creator_telegram_id: number | null;
   created_at: string;
+
   results_visibility?: ResultsVisibility;
+
   ends_at?: string | null;
+
   allow_revoting?: boolean;
+
   participant_count?: number;
 };
