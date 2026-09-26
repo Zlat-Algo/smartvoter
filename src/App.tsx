@@ -14,6 +14,7 @@ import {
   hasVoted,
   hasRankedVoted,
   rankedVote,
+  getRankedResults,
   vote,
 } from "./lib/polls";
 
@@ -30,6 +31,12 @@ import type {
   Screen,
   VotingMethod,
 } from "./types/poll";
+
+type RankedResult = {
+  option: PollOption;
+  score: number;
+  firstPlaces: number;
+};
 
 export default function App() {
   const [screen, setScreen] =
@@ -49,6 +56,12 @@ export default function App() {
 
   const [voteCounts, setVoteCounts] =
     useState<Record<string, number>>({});
+
+  const [rankedResults, setRankedResults] =
+    useState<RankedResult[]>([]);
+
+  const [totalRankedVoters, setTotalRankedVoters] =
+    useState(0);
 
   const [myPolls, setMyPolls] =
     useState<Poll[]>([]);
@@ -86,7 +99,7 @@ export default function App() {
         result.options
       );
 
-      const method =
+      const method: VotingMethod =
         result.poll
           .voting_method === "ranked"
           ? "ranked"
@@ -99,6 +112,8 @@ export default function App() {
           await getResults(pollId);
 
         setVoteCounts(results);
+        setRankedResults([]);
+        setTotalRankedVoters(0);
 
         if (telegramUserId) {
           const alreadyVoted =
@@ -115,6 +130,20 @@ export default function App() {
         }
       } else {
         setVoteCounts({});
+
+        const ranked =
+          await getRankedResults(
+            pollId,
+            result.options
+          );
+
+        setRankedResults(
+          ranked.results
+        );
+
+        setTotalRankedVoters(
+          ranked.totalVoters
+        );
 
         if (telegramUserId) {
           const alreadyVoted =
@@ -196,6 +225,8 @@ export default function App() {
       );
 
       setVoteCounts({});
+      setRankedResults([]);
+      setTotalRankedVoters(0);
       setVoted(false);
 
       setScreen("poll");
@@ -368,6 +399,20 @@ export default function App() {
 
         setVoted(true);
 
+        const ranked =
+          await getRankedResults(
+            createdPollId,
+            pollOptions
+          );
+
+        setRankedResults(
+          ranked.results
+        );
+
+        setTotalRankedVoters(
+          ranked.totalVoters
+        );
+
         alert(
           `Ваш порядок принят, ${telegramName}! 🏆`
         );
@@ -378,6 +423,20 @@ export default function App() {
           error?.code === "23505"
         ) {
           setVoted(true);
+
+          const ranked =
+            await getRankedResults(
+              createdPollId,
+              pollOptions
+            );
+
+          setRankedResults(
+            ranked.results
+          );
+
+          setTotalRankedVoters(
+            ranked.totalVoters
+          );
 
           alert(
             "Вы уже голосовали!"
@@ -437,6 +496,12 @@ export default function App() {
         options={pollOptions}
         voted={voted}
         loading={loading}
+        totalVoters={
+          totalRankedVoters
+        }
+        results={
+          rankedResults
+        }
         setScreen={setScreen}
         onVote={
           handleRankedVote
@@ -453,8 +518,12 @@ export default function App() {
           createdPollId || ""
         }
         options={pollOptions}
-        voteCounts={voteCounts}
-        totalVotes={totalVotes}
+        voteCounts={
+          voteCounts
+        }
+        totalVotes={
+          totalVotes
+        }
         voted={voted}
         loading={loading}
         setScreen={setScreen}
