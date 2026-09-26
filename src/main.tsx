@@ -1,4 +1,3 @@
-```tsx
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { supabase } from "./supabase";
@@ -202,5 +201,128 @@ function App() {
             key={index}
             value={option}
             onChange={(e) =>
-              updateOption(index, e.
-```
+              updateOption(index, e.target.value)
+            }
+            placeholder={`Вариант ${index + 1}`}
+          />
+        ))}
+
+        <button
+          className="secondary"
+          onClick={addOption}
+        >
+          + Добавить вариант
+        </button>
+
+        <button
+          className="primary"
+          onClick={createPoll}
+          disabled={loading}
+        >
+          {loading
+            ? "Создаём..."
+            : "Создать голосование"}
+        </button>
+      </main>
+    );
+  }
+
+  if (screen === "poll") {
+    return (
+      <main className="app">
+        <button
+          className="back"
+          onClick={() => setScreen("home")}
+        >
+          ← На главную
+        </button>
+
+        <h1>{title}</h1>
+
+        <p className="subtitle">
+          {voted
+            ? "Ваш голос принят!"
+            : "Выберите один вариант:"}
+        </p>
+
+        <div className="poll-options">
+          {options.map((option, index) => (
+            <button
+              key={index}
+              className="poll-option"
+              onClick={() => vote(index)}
+              disabled={voted}
+            >
+              {option}
+            </button>
+          ))}
+        </div>
+
+        <h2>Результаты</h2>
+
+        <p className="subtitle">
+          Всего голосов: {totalVotes}
+        </p>
+
+        <div className="results">
+          {options.map((option, index) => {
+            const count = voteCounts[index] || 0;
+
+            return (
+              <div
+                className="result-row"
+                key={index}
+              >
+                <span>{option}</span>
+                <strong>{count}</strong>
+              </div>
+            );
+          })}
+        </div>
+
+        {createdPollId && (
+          <p className="poll-id">
+            ID голосования: {createdPollId}
+          </p>
+        )}
+      </main>
+    );
+  }
+
+  return (
+    <main className="app">
+      <div className="logo">🗳️</div>
+
+      <h1>SmartVoter</h1>
+
+      <p className="subtitle">
+        Создавай голосования с продвинутыми
+        способами подсчёта голосов.
+      </p>
+
+      <button
+        className="primary"
+        onClick={() => setScreen("create")}
+      >
+        Создать голосование
+      </button>
+
+      <button
+        className="secondary"
+        onClick={() =>
+          alert("Здесь будут твои голосования")
+        }
+      >
+        Мои голосования
+      </button>
+    </main>
+  );
+}
+
+ReactDOM.createRoot(
+  document.getElementById("root")!
+).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);
