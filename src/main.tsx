@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import ReactDOM from "react-dom/client";
 import { supabase } from "./supabase";
 import "./style.css";
@@ -27,12 +27,14 @@ declare global {
         expand: () => void;
         initData: string;
         initDataUnsafe?: {
+          start_param?: string;
           user?: {
             id: number;
             first_name?: string;
             username?: string;
           };
         };
+        openTelegramLink?: (url: string) => void;
       };
     };
   }
@@ -84,33 +86,69 @@ function App() {
     const counts: Record<string, number> = {};
 
     for (const vote of data || []) {
-      counts[vote.option_id] = (counts[vote.option_id] || 0) + 1;
+      counts[vote.option_id] =
+        (counts[vote.option_id] || 0) + 1;
     }
 
     setVoteCounts(counts);
   };
 
-  const openPoll = async (poll: Poll) => {
+  const checkIfVoted = async (pollId: string) => {
+    if (!telegramUserId) {
+      setVoted(false);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("votes")
+      .select("id")
+      .eq("poll_id", pollId)
+      .eq("telegram_user_id", telegramUserId)
+      .limit(1);
+
+    if (error) {
+      console.error("CHECK VOTE ERROR:", error);
+      setVoted(false);
+      return;
+    }
+
+    setVoted((data || []).length > 0);
+  };
+
+  const openPollById = async (pollId: string) => {
     try {
       setLoading(true);
 
-      const { data: optionsData, error } = await supabase
-        .from("poll_options")
-        .select("id, text, position")
-        .eq("poll_id", poll.id)
-        .order("position");
+      const { data: poll, error: pollError } = await supabase
+        .from("polls")
+        .select(
+          "id, title, voting_method, creator_telegram_id, created_at"
+        )
+        .eq("id", pollId)
+        .single();
 
-      if (error) {
-        throw error;
+      if (pollError) {
+        throw pollError;
+      }
+
+      const { data: optionsData, error: optionsError } =
+        await supabase
+          .from("poll_options")
+          .select("id, text, position")
+          .eq("poll_id", pollId)
+          .order("position");
+
+      if (optionsError) {
+        throw optionsError;
       }
 
       setCreatedPollId(poll.id);
       setTitle(poll.title);
       setPollOptions(optionsData || []);
       setVoteCounts({});
-      setVoted(false);
 
-      await loadResults(poll.id);
+      await loadResults(pollId);
+      await checkIfVoted(pollId);
 
       setScreen("poll");
     } catch (error: any) {
@@ -124,6 +162,10 @@ function App() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const openPoll = async (poll: Poll) => {
+    await openPollById(poll.id);
   };
 
   const loadMyPolls = async () => {
@@ -174,6 +216,11 @@ function App() {
 
     if (validOptions.length < 2) {
       alert("Добавьте хотя бы два варианта");
+      return;
+    }
+
+    if (!telegramUserId) {
+      alert("Не удалось определить Telegram-пользователя");
       return;
     }
 
@@ -264,6 +311,7 @@ function App() {
 
       if (error) {
         if (error.code === "23505") {
+          setVoted(true);
           alert("Вы уже голосовали!");
         } else {
           console.error("VOTE ERROR:", error);
@@ -288,6 +336,43 @@ function App() {
       );
     }
   };
+
+  const sharePoll = async () => {
+    if (!createdPollId) {
+      return;
+    }
+
+    const pollLink =
+      `https://t.me/smart_voter_bot?startapp=${createdPollId}`;
+
+    const shareUrl =
+      `https://t.me/share/url?url=${encodeURIComponent(
+        pollLink
+      )}&text=${encodeURIComponent(
+        `🗳️ Голосование: ${title}`
+      )}`;
+
+    if (window.Telegram?.WebApp?.openTelegramLink) {
+      window.Telegram.WebApp.openTelegramLink(shareUrl);
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(pollLink);
+      alert(`Ссылка скопирована:\n\n${pollLink}`);
+    } catch {
+      alert(`Ссылка на голосование:\n\n${pollLink}`);
+    }
+  };
+
+  useEffect(() => {
+    const startParam =
+      window.Telegram?.WebApp?.initDataUnsafe?.start_param;
+
+    if (startParam) {
+      openPollById(startParam);
+    }
+  }, []);
 
   const totalVotes = Object.values(voteCounts).reduce(
     (sum, count) => sum + count,
@@ -375,6 +460,13 @@ function App() {
             </button>
           ))}
         </div>
+
+        <button
+          className="secondary"
+          onClick={sharePoll}
+        >
+          📤 Поделиться голосованием
+        </button>
 
         <h2>Результаты</h2>
 
