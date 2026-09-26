@@ -5,6 +5,12 @@ import "./style.css";
 
 type Screen = "home" | "create" | "poll";
 
+type PollOption = {
+  id: string;
+  text: string;
+  position: number;
+};
+
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
 
@@ -12,7 +18,9 @@ function App() {
   const [options, setOptions] = useState(["", ""]);
 
   const [createdPollId, setCreatedPollId] = useState<string | null>(null);
+  const [pollOptions, setPollOptions] = useState<PollOption[]>([]);
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+
   const [loading, setLoading] = useState(false);
   const [voted, setVoted] = useState(false);
 
@@ -35,15 +43,15 @@ function App() {
       .eq("poll_id", createdPollId);
 
     if (error) {
-      console.error(error);
+      console.error("RESULTS ERROR:", error);
       return;
     }
 
     const counts: Record<string, number> = {};
 
-    data.forEach((vote) => {
+    for (const vote of data || []) {
       counts[vote.option_id] = (counts[vote.option_id] || 0) + 1;
-    });
+    }
 
     setVoteCounts(counts);
   };
@@ -66,6 +74,7 @@ function App() {
     try {
       setLoading(true);
 
+      // Создаём голосование
       const { data: poll, error: pollError } = await supabase
         .from("polls")
         .insert({
@@ -79,21 +88,35 @@ function App() {
         throw pollError;
       }
 
-      const { error: optionsError } = await supabase
-        .from("poll_options")
-        .insert(
-          validOptions.map((text, index) => ({
-            poll_id: poll.id,
-            text,
-            position: index,
-          }))
-        );
+      // Создаём варианты
+      const { data: createdOptions, error: optionsError } =
+        await supabase
+          .from("poll_options")
+          .insert(
+            validOptions.map((text, index) => ({
+              poll_id: poll.id,
+              text,
+              position: index,
+            }))
+          )
+          .select();
 
       if (optionsError) {
         throw optionsError;
       }
 
+      if (!createdOptions) {
+        throw new Error("Варианты голосования не создались");
+      }
+
       setCreatedPollId(poll.id);
+
+      setPollOptions(
+        [...createdOptions].sort(
+          (a, b) => a.position - b.position
+        )
+      );
+
       setOptions(validOptions);
       setVoteCounts({});
       setVoted(false);
@@ -111,7 +134,7 @@ function App() {
     }
   };
 
-  const vote = async (optionIndex: number) => {
+  const vote = async (optionId: string) => {
     if (!createdPollId) {
       alert("Не найдено голосование");
       return;
@@ -123,30 +146,19 @@ function App() {
     }
 
     try {
-      const { data: option, error: optionError } = await supabase
-        .from("poll_options")
-        .select("id")
-        .eq("poll_id", createdPollId)
-        .eq("position", optionIndex)
-        .single();
-
-      if (optionError || !option) {
-        console.error(optionError);
-        alert("Не удалось найти вариант");
-        return;
-      }
-
-      const { error } = await supabase.from("votes").insert({
-        poll_id: createdPollId,
-        option_id: option.id,
-        telegram_user_id: Date.now(),
-      });
+      const { error } = await supabase
+        .from("votes")
+        .insert({
+          poll_id: createdPollId,
+          option_id: optionId,
+          telegram_user_id: Date.now(),
+        });
 
       if (error) {
         if (error.code === "23505") {
           alert("Вы уже голосовали!");
         } else {
-          console.error(error);
+          console.error("VOTE ERROR:", error);
           alert(`Ошибка: ${error.message}`);
         }
 
@@ -155,11 +167,12 @@ function App() {
 
       setVoted(true);
 
+      // Загружаем актуальные результаты
       await loadResults();
 
       alert("Голос принят! 🗳️");
     } catch (error: any) {
-      console.error(error);
+      console.error("VOTE ERROR:", error);
 
       alert(
         `Не удалось отправить голос:\n\n${
@@ -246,14 +259,14 @@ function App() {
         </p>
 
         <div className="poll-options">
-          {options.map((option, index) => (
+          {pollOptions.map((option) => (
             <button
-              key={index}
+              key={option.id}
               className="poll-option"
-              onClick={() => vote(index)}
+              onClick={() => vote(option.id)}
               disabled={voted}
             >
-              {option}
+              {option.text}
             </button>
           ))}
         </div>
@@ -265,15 +278,15 @@ function App() {
         </p>
 
         <div className="results">
-          {options.map((option, index) => {
-            const count = voteCounts[index] || 0;
+          {pollOptions.map((option) => {
+            const count = voteCounts[option.id] || 0;
 
             return (
               <div
                 className="result-row"
-                key={index}
+                key={option.id}
               >
-                <span>{option}</span>
+                <span>{option.text}</span>
                 <strong>{count}</strong>
               </div>
             );
@@ -326,3 +339,4 @@ ReactDOM.createRoot(
     <App />
   </React.StrictMode>
 );
+```
