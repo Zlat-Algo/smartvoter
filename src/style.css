@@ -155,3 +155,43 @@ input:focus {
   font-size: 13px;
   opacity: 0.65;
 }
+
+.poll-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.poll-card {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid
+    var(--tg-theme-hint-color, rgba(128, 128, 128, 0.2));
+  border-radius: 16px;
+  background: var(--tg-theme-secondary-bg-color, #f1f1f1);
+  color: var(--tg-theme-text-color, #000);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    opacity 0.15s ease;
+}
+
+.poll-card:active {
+  transform: scale(0.98);
+  opacity: 0.8;
+}
+
+.poll-card strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.poll-card span {
+  display: block;
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #777);
+}
