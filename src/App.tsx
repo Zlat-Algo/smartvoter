@@ -8,6 +8,7 @@ import MyPolls from "./components/MyPolls";
 
 import {
   createPoll,
+  deletePoll,
   getMyPolls,
   getPoll,
   getResults,
@@ -40,47 +41,95 @@ type RankedResult = {
 };
 
 export default function App() {
-  const [screen, setScreen] =
-    useState<Screen>("home");
+  const [
+    screen,
+    setScreen,
+  ] = useState<Screen>("home");
 
-  const [createdPollId, setCreatedPollId] =
-    useState<string | null>(null);
+  const [
+    createdPollId,
+    setCreatedPollId,
+  ] = useState<string | null>(
+    null
+  );
 
-  const [title, setTitle] =
-    useState("");
+  const [
+    title,
+    setTitle,
+  ] = useState("");
 
-  const [pollOptions, setPollOptions] =
-    useState<PollOption[]>([]);
+  const [
+    pollOptions,
+    setPollOptions,
+  ] = useState<PollOption[]>(
+    []
+  );
 
-  const [votingMethod, setVotingMethod] =
-    useState<VotingMethod>("plurality");
+  const [
+    votingMethod,
+    setVotingMethod,
+  ] = useState<VotingMethod>(
+    "plurality"
+  );
 
-  const [resultsVisibility, setResultsVisibility] =
-    useState<ResultsVisibility>("always");
+  const [
+    resultsVisibility,
+    setResultsVisibility,
+  ] =
+    useState<ResultsVisibility>(
+      "always"
+    );
 
-  const [endsAt, setEndsAt] =
-    useState<string | null>(null);
+  const [
+    endsAt,
+    setEndsAt,
+  ] = useState<string | null>(
+    null
+  );
 
-  const [now, setNow] =
-    useState(Date.now());
+  const [
+    allowRevoting,
+    setAllowRevoting,
+  ] = useState(true);
 
-  const [voteCounts, setVoteCounts] =
-    useState<Record<string, number>>({});
+  const [
+    now,
+    setNow,
+  ] = useState(Date.now());
 
-  const [rankedResults, setRankedResults] =
-    useState<RankedResult[]>([]);
+  const [
+    voteCounts,
+    setVoteCounts,
+  ] = useState<
+    Record<string, number>
+  >({});
 
-  const [totalRankedVoters, setTotalRankedVoters] =
-    useState(0);
+  const [
+    rankedResults,
+    setRankedResults,
+  ] = useState<RankedResult[]>(
+    []
+  );
 
-  const [myPolls, setMyPolls] =
-    useState<Poll[]>([]);
+  const [
+    totalRankedVoters,
+    setTotalRankedVoters,
+  ] = useState(0);
 
-  const [loading, setLoading] =
-    useState(false);
+  const [
+    myPolls,
+    setMyPolls,
+  ] = useState<Poll[]>([]);
 
-  const [voted, setVoted] =
-    useState(false);
+  const [
+    loading,
+    setLoading,
+  ] = useState(false);
+
+  const [
+    voted,
+    setVoted,
+  ] = useState(false);
 
   const telegramUserId =
     getTelegramUserId();
@@ -89,201 +138,283 @@ export default function App() {
     getTelegramUserName();
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      setNow(Date.now());
-    }, 30000);
+    const timer =
+      window.setInterval(
+        () => {
+          setNow(
+            Date.now()
+          );
+        },
+        30000
+      );
 
     return () => {
-      window.clearInterval(timer);
+      window.clearInterval(
+        timer
+      );
     };
   }, []);
 
   const pollExpired =
     endsAt !== null &&
-    new Date(endsAt).getTime() <= now;
+    new Date(endsAt).getTime() <=
+      now;
 
-  const openPollById = async (
-    pollId: string
-  ) => {
-    try {
-      setLoading(true);
+  const showResults =
+    resultsVisibility ===
+      "always" ||
+    voted ||
+    (
+      resultsVisibility ===
+        "after_expiration" &&
+      pollExpired
+    );
 
-      const result =
-        await getPoll(pollId);
+  const openPollById =
+    async (
+      pollId: string
+    ) => {
+      try {
+        setLoading(true);
 
-      setCreatedPollId(
-        result.poll.id
-      );
-
-      setTitle(
-        result.poll.title
-      );
-
-      setPollOptions(
-        result.options
-      );
-
-      const method: VotingMethod =
-        result.poll.voting_method ===
-        "ranked"
-          ? "ranked"
-          : "plurality";
-
-      setVotingMethod(method);
-
-      setResultsVisibility(
-        result.poll.results_visibility ||
-          "always"
-      );
-
-      setEndsAt(
-        result.poll.ends_at || null
-      );
-
-      if (method === "plurality") {
-        const results =
-          await getResults(pollId);
-
-        setVoteCounts(results);
-        setRankedResults([]);
-        setTotalRankedVoters(0);
-
-        if (telegramUserId) {
-          const alreadyVoted =
-            await hasVoted(
-              pollId,
-              telegramUserId
-            );
-
-          setVoted(alreadyVoted);
-        } else {
-          setVoted(false);
-        }
-      } else {
-        setVoteCounts({});
-
-        const ranked =
-          await getRankedResults(
-            pollId,
-            result.options
+        const result =
+          await getPoll(
+            pollId
           );
 
-        setRankedResults(
-          ranked.results
+        setCreatedPollId(
+          result.poll.id
         );
 
-        setTotalRankedVoters(
-          ranked.totalVoters
+        setTitle(
+          result.poll.title
         );
 
-        if (telegramUserId) {
-          const alreadyVoted =
-            await hasRankedVoted(
-              pollId,
-              telegramUserId
+        setPollOptions(
+          result.options
+        );
+
+        const method: VotingMethod =
+          result.poll
+            .voting_method ===
+          "ranked"
+            ? "ranked"
+            : "plurality";
+
+        setVotingMethod(
+          method
+        );
+
+        setResultsVisibility(
+          result.poll
+            .results_visibility ||
+            "always"
+        );
+
+        setEndsAt(
+          result.poll
+            .ends_at ||
+            null
+        );
+
+        setAllowRevoting(
+          result.poll
+            .allow_revoting ??
+            true
+        );
+
+        if (
+          method ===
+          "plurality"
+        ) {
+          const results =
+            await getResults(
+              pollId
             );
 
-          setVoted(alreadyVoted);
+          setVoteCounts(
+            results
+          );
+
+          setRankedResults(
+            []
+          );
+
+          setTotalRankedVoters(
+            0
+          );
+
+          if (
+            telegramUserId
+          ) {
+            const alreadyVoted =
+              await hasVoted(
+                pollId,
+                telegramUserId
+              );
+
+            setVoted(
+              alreadyVoted
+            );
+          } else {
+            setVoted(false);
+          }
         } else {
-          setVoted(false);
+          setVoteCounts(
+            {}
+          );
+
+          const ranked =
+            await getRankedResults(
+              pollId,
+              result.options
+            );
+
+          setRankedResults(
+            ranked.results
+          );
+
+          setTotalRankedVoters(
+            ranked.totalVoters
+          );
+
+          if (
+            telegramUserId
+          ) {
+            const alreadyVoted =
+              await hasRankedVoted(
+                pollId,
+                telegramUserId
+              );
+
+            setVoted(
+              alreadyVoted
+            );
+          } else {
+            setVoted(false);
+          }
         }
+
+        setScreen(
+          "poll"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
+
+        alert(
+          `Не удалось открыть голосование:\n\n${
+            error?.message ||
+            JSON.stringify(
+              error
+            )
+          }`
+        );
+      } finally {
+        setLoading(false);
       }
-
-      setScreen("poll");
-    } catch (error: any) {
-      console.error(error);
-
-      alert(
-        `Не удалось открыть голосование:\n\n${
-          error?.message ||
-          JSON.stringify(error)
-        }`
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   useEffect(() => {
     const startParam =
       getStartParam();
 
     if (startParam) {
-      openPollById(startParam);
+      openPollById(
+        startParam
+      );
     }
   }, []);
 
-  const handleCreatePoll = async (
-    pollTitle: string,
-    options: string[],
-    method: VotingMethod,
-    visibility: ResultsVisibility,
-    expiration: string | null
-  ) => {
-    if (!telegramUserId) {
-      alert(
-        "Не удалось определить Telegram-пользователя"
-      );
+  const handleCreatePoll =
+    async (
+      pollTitle: string,
+      options: string[],
+      method: VotingMethod,
+      visibility: ResultsVisibility,
+      expiration: string | null,
+      revoting: boolean
+    ) => {
+      if (!telegramUserId) {
+        alert(
+          "Не удалось определить Telegram-пользователя"
+        );
 
-      return;
-    }
+        return;
+      }
 
-    try {
-      setLoading(true);
+      try {
+        setLoading(true);
 
-      const result =
-        await createPoll(
-          pollTitle,
-          options,
-          telegramUserId,
-          method,
-          visibility,
+        const result =
+          await createPoll(
+            pollTitle,
+            options,
+            telegramUserId,
+            method,
+            visibility,
+            expiration,
+            revoting
+          );
+
+        setCreatedPollId(
+          result.poll.id
+        );
+
+        setTitle(
+          result.poll.title
+        );
+
+        setPollOptions(
+          result.options
+        );
+
+        setVotingMethod(
+          method
+        );
+
+        setResultsVisibility(
+          visibility
+        );
+
+        setEndsAt(
           expiration
         );
 
-      setCreatedPollId(
-        result.poll.id
-      );
+        setAllowRevoting(
+          revoting
+        );
 
-      setTitle(
-        result.poll.title
-      );
+        setVoteCounts({});
+        setRankedResults([]);
+        setTotalRankedVoters(0);
+        setVoted(false);
 
-      setPollOptions(
-        result.options
-      );
+        setScreen(
+          "poll"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
 
-      setVotingMethod(
-        method
-      );
-
-      setResultsVisibility(
-        visibility
-      );
-
-      setEndsAt(
-        expiration
-      );
-
-      setVoteCounts({});
-      setRankedResults([]);
-      setTotalRankedVoters(0);
-      setVoted(false);
-
-      setScreen("poll");
-    } catch (error: any) {
-      console.error(error);
-
-      alert(
-        `Не удалось создать голосование:\n\n${
-          error?.message ||
-          JSON.stringify(error)
-        }`
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
+        alert(
+          `Не удалось создать голосование:\n\n${
+            error?.message ||
+            JSON.stringify(
+              error
+            )
+          }`
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const handleLoadMyPolls =
     async () => {
@@ -303,15 +434,26 @@ export default function App() {
             telegramUserId
           );
 
-        setMyPolls(polls);
-        setScreen("myPolls");
-      } catch (error: any) {
-        console.error(error);
+        setMyPolls(
+          polls
+        );
+
+        setScreen(
+          "myPolls"
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
 
         alert(
           `Не удалось загрузить голосования:\n\n${
             error?.message ||
-            JSON.stringify(error)
+            JSON.stringify(
+              error
+            )
           }`
         );
       } finally {
@@ -319,95 +461,149 @@ export default function App() {
       }
     };
 
-  const handleOpenPoll = async (
-    poll: Poll
-  ) => {
-    await openPollById(
-      poll.id
-    );
-  };
-
-  const handleVote = async (
-    optionId: string
-  ) => {
-    if (!createdPollId) {
-      alert(
-        "Не найдено голосование"
+  const handleOpenPoll =
+    async (
+      poll: Poll
+    ) => {
+      await openPollById(
+        poll.id
       );
+    };
 
-      return;
-    }
-
-    if (!telegramUserId) {
-      alert(
-        "Не удалось определить Telegram-пользователя"
-      );
-
-      return;
-    }
-
-    if (pollExpired) {
-      alert(
-        "Это голосование уже завершено."
-      );
-
-      return;
-    }
-
-    if (voted) {
-      alert(
-        "Вы уже голосовали!"
-      );
-
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      await vote(
-        createdPollId,
-        optionId,
-        telegramUserId
-      );
-
-      setVoted(true);
-
-      const results =
-        await getResults(
-          createdPollId
+  const handleDeletePoll =
+    async (
+      poll: Poll
+    ) => {
+      const confirmed =
+        window.confirm(
+          `Удалить голосование «${poll.title}»?\n\nВсе варианты и голоса тоже будут удалены.`
         );
 
-      setVoteCounts(
-        results
-      );
+      if (!confirmed) {
+        return;
+      }
 
-      alert(
-        `Голос принят, ${telegramName}! 🗳️`
-      );
-    } catch (error: any) {
-      console.error(error);
+      try {
+        setLoading(true);
 
-      if (
-        error?.code === "23505"
+        await deletePoll(
+          poll.id
+        );
+
+        setMyPolls(
+          (current) =>
+            current.filter(
+              (item) =>
+                item.id !==
+                poll.id
+            )
+        );
+
+        alert(
+          "Голосование удалено."
+        );
+      } catch (
+        error: any
       ) {
-        setVoted(true);
+        console.error(
+          error
+        );
 
         alert(
-          "Вы уже голосовали!"
-        );
-      } else {
-        alert(
-          `Не удалось отправить голос:\n\n${
+          `Не удалось удалить голосование:\n\n${
             error?.message ||
-            JSON.stringify(error)
+            JSON.stringify(
+              error
+            )
           }`
         );
+      } finally {
+        setLoading(false);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
+
+  const handleVote =
+    async (
+      optionId: string
+    ) => {
+      if (!createdPollId) {
+        alert(
+          "Не найдено голосование"
+        );
+
+        return;
+      }
+
+      if (!telegramUserId) {
+        alert(
+          "Не удалось определить Telegram-пользователя"
+        );
+
+        return;
+      }
+
+      if (pollExpired) {
+        alert(
+          "Это голосование уже завершено."
+        );
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        await vote(
+          createdPollId,
+          optionId,
+          telegramUserId,
+          allowRevoting
+        );
+
+        setVoted(true);
+
+        const results =
+          await getResults(
+            createdPollId
+          );
+
+        setVoteCounts(
+          results
+        );
+
+        alert(
+          `Голос принят, ${telegramName}! 🗳️`
+        );
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
+
+        if (
+          error?.code ===
+            "ALREADY_VOTED"
+        ) {
+          setVoted(true);
+
+          alert(
+            "Переголосование запрещено."
+          );
+        } else {
+          alert(
+            `Не удалось отправить голос:\n\n${
+              error?.message ||
+              JSON.stringify(
+                error
+              )
+            }`
+          );
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
 
   const handleRankedVote =
     async (
@@ -437,21 +633,14 @@ export default function App() {
         return;
       }
 
-      if (voted) {
-        alert(
-          "Вы уже голосовали!"
-        );
-
-        return;
-      }
-
       try {
         setLoading(true);
 
         await rankedVote(
           createdPollId,
           orderedOptions,
-          telegramUserId
+          telegramUserId,
+          allowRevoting
         );
 
         setVoted(true);
@@ -473,36 +662,29 @@ export default function App() {
         alert(
           `Ваш порядок принят, ${telegramName}! 🏆`
         );
-      } catch (error: any) {
-        console.error(error);
+      } catch (
+        error: any
+      ) {
+        console.error(
+          error
+        );
 
         if (
-          error?.code === "23505"
+          error?.code ===
+            "ALREADY_VOTED"
         ) {
           setVoted(true);
 
-          const ranked =
-            await getRankedResults(
-              createdPollId,
-              pollOptions
-            );
-
-          setRankedResults(
-            ranked.results
-          );
-
-          setTotalRankedVoters(
-            ranked.totalVoters
-          );
-
           alert(
-            "Вы уже голосовали!"
+            "Переголосование запрещено."
           );
         } else {
           alert(
             `Не удалось отправить голос:\n\n${
               error?.message ||
-              JSON.stringify(error)
+              JSON.stringify(
+                error
+              )
             }`
           );
         }
@@ -511,16 +693,17 @@ export default function App() {
       }
     };
 
-  const handleShare = () => {
-    if (!createdPollId) {
-      return;
-    }
+  const handleShare =
+    () => {
+      if (!createdPollId) {
+        return;
+      }
 
-    sharePoll(
-      createdPollId,
-      title
-    );
-  };
+      sharePoll(
+        createdPollId,
+        title
+      );
+    };
 
   const totalVotes =
     Object.values(
@@ -531,16 +714,18 @@ export default function App() {
       0
     );
 
-  const showResults =
-    resultsVisibility === "always" ||
-    voted ||
-    pollExpired;
-
-  if (screen === "create") {
+  if (
+    screen ===
+    "create"
+  ) {
     return (
       <CreatePoll
-        loading={loading}
-        setScreen={setScreen}
+        loading={
+          loading
+        }
+        setScreen={
+          setScreen
+        }
         onCreate={
           handleCreatePoll
         }
@@ -549,15 +734,21 @@ export default function App() {
   }
 
   if (
-    screen === "poll" &&
-    votingMethod === "ranked"
+    screen ===
+      "poll" &&
+    votingMethod ===
+      "ranked"
   ) {
     return (
       <RankedPollScreen
         title={title}
-        options={pollOptions}
+        options={
+          pollOptions
+        }
         voted={voted}
-        loading={loading}
+        loading={
+          loading
+        }
         totalVoters={
           totalRankedVoters
         }
@@ -570,7 +761,12 @@ export default function App() {
         pollExpired={
           pollExpired
         }
-        setScreen={setScreen}
+        allowRevoting={
+          allowRevoting
+        }
+        setScreen={
+          setScreen
+        }
         onVote={
           handleRankedVote
         }
@@ -581,14 +777,20 @@ export default function App() {
     );
   }
 
-  if (screen === "poll") {
+  if (
+    screen ===
+    "poll"
+  ) {
     return (
       <PollScreen
         title={title}
         pollId={
-          createdPollId || ""
+          createdPollId ||
+          ""
         }
-        options={pollOptions}
+        options={
+          pollOptions
+        }
         voteCounts={
           voteCounts
         }
@@ -596,28 +798,51 @@ export default function App() {
           totalVotes
         }
         voted={voted}
-        loading={loading}
+        loading={
+          loading
+        }
         showResults={
           showResults
         }
         pollExpired={
           pollExpired
         }
-        setScreen={setScreen}
-        onVote={handleVote}
-        onShare={handleShare}
+        allowRevoting={
+          allowRevoting
+        }
+        setScreen={
+          setScreen
+        }
+        onVote={
+          handleVote
+        }
+        onShare={
+          handleShare
+        }
       />
     );
   }
 
-  if (screen === "myPolls") {
+  if (
+    screen ===
+    "myPolls"
+  ) {
     return (
       <MyPolls
-        polls={myPolls}
-        loading={loading}
-        setScreen={setScreen}
+        polls={
+          myPolls
+        }
+        loading={
+          loading
+        }
+        setScreen={
+          setScreen
+        }
         openPoll={
           handleOpenPoll
+        }
+        deletePoll={
+          handleDeletePoll
         }
       />
     );
@@ -628,8 +853,12 @@ export default function App() {
       telegramName={
         telegramName
       }
-      loading={loading}
-      setScreen={setScreen}
+      loading={
+        loading
+      }
+      setScreen={
+        setScreen
+      }
       loadMyPolls={
         handleLoadMyPolls
       }
