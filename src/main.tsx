@@ -1,3 +1,4 @@
+```tsx
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import { supabase } from "./supabase";
@@ -10,8 +11,11 @@ function App() {
 
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
+
   const [createdPollId, setCreatedPollId] = useState<string | null>(null);
+  const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [voted, setVoted] = useState(false);
 
   const addOption = () => {
     setOptions([...options, ""]);
@@ -21,6 +25,28 @@ function App() {
     const copy = [...options];
     copy[index] = value;
     setOptions(copy);
+  };
+
+  const loadResults = async () => {
+    if (!createdPollId) return;
+
+    const { data, error } = await supabase
+      .from("votes")
+      .select("option_id")
+      .eq("poll_id", createdPollId);
+
+    if (error) {
+      console.error(error);
+      return;
+    }
+
+    const counts: Record<string, number> = {};
+
+    data.forEach((vote) => {
+      counts[vote.option_id] = (counts[vote.option_id] || 0) + 1;
+    });
+
+    setVoteCounts(counts);
   };
 
   const createPoll = async () => {
@@ -41,7 +67,6 @@ function App() {
     try {
       setLoading(true);
 
-      // 1. Создаём голосование
       const { data: poll, error: pollError } = await supabase
         .from("polls")
         .insert({
@@ -55,7 +80,6 @@ function App() {
         throw pollError;
       }
 
-      // 2. Создаём варианты
       const { error: optionsError } = await supabase
         .from("poll_options")
         .insert(
@@ -72,64 +96,92 @@ function App() {
 
       setCreatedPollId(poll.id);
       setOptions(validOptions);
+      setVoteCounts({});
+      setVoted(false);
       setScreen("poll");
     } catch (error: any) {
-  console.error("SUPABASE ERROR:", error);
+      console.error("SUPABASE ERROR:", error);
 
-  alert(
-    `Ошибка Supabase:\n\n${error?.message || JSON.stringify(error)}`
-  );
-}finally {
+      alert(
+        `Ошибка Supabase:\n\n${
+          error?.message || JSON.stringify(error)
+        }`
+      );
+    } finally {
       setLoading(false);
     }
   };
-const vote = async (optionIndex: number) => {
-  if (!createdPollId) {
-    alert("Не найдено голосование");
-    return;
-  }
 
-  try {
-    const optionId = (
-      await supabase
+  const vote = async (optionIndex: number) => {
+    if (!createdPollId) {
+      alert("Не найдено голосование");
+      return;
+    }
+
+    if (voted) {
+      alert("Вы уже голосовали!");
+      return;
+    }
+
+    try {
+      const { data: option, error: optionError } = await supabase
         .from("poll_options")
         .select("id")
         .eq("poll_id", createdPollId)
         .eq("position", optionIndex)
-        .single()
-    ).data?.id;
+        .single();
 
-    if (!optionId) {
-      alert("Не удалось найти вариант");
-      return;
-    }
-
-    const { error } = await supabase.from("votes").insert({
-      poll_id: createdPollId,
-      option_id: optionId,
-      telegram_user_id: Date.now()
-    });
-
-    if (error) {
-      if (error.code === "23505") {
-        alert("Вы уже голосовали!");
-      } else {
-        console.error(error);
-        alert(`Ошибка: ${error.message}`);
+      if (optionError || !option) {
+        console.error(optionError);
+        alert("Не удалось найти вариант");
+        return;
       }
-      return;
-    }
 
-    alert("Голос принят! 🗳️");
-  } catch (error) {
-    console.error(error);
-    alert("Не удалось отправить голос");
-  }
-};
+      const { error } = await supabase.from("votes").insert({
+        poll_id: createdPollId,
+        option_id: option.id,
+        telegram_user_id: Date.now(),
+      });
+
+      if (error) {
+        if (error.code === "23505") {
+          alert("Вы уже голосовали!");
+        } else {
+          console.error(error);
+          alert(`Ошибка: ${error.message}`);
+        }
+
+        return;
+      }
+
+      setVoted(true);
+
+      await loadResults();
+
+      alert("Голос принят! 🗳️");
+    } catch (error: any) {
+      console.error(error);
+
+      alert(
+        `Не удалось отправить голос:\n\n${
+          error?.message || JSON.stringify(error)
+        }`
+      );
+    }
+  };
+
+  const totalVotes = Object.values(voteCounts).reduce(
+    (sum, count) => sum + count,
+    0
+  );
+
   if (screen === "create") {
     return (
       <main className="app">
-        <button className="back" onClick={() => setScreen("home")}>
+        <button
+          className="back"
+          onClick={() => setScreen("home")}
+        >
           ← Назад
         </button>
 
@@ -149,90 +201,6 @@ const vote = async (optionIndex: number) => {
           <input
             key={index}
             value={option}
-            onChange={(e) => updateOption(index, e.target.value)}
-            placeholder={`Вариант ${index + 1}`}
-          />
-        ))}
-
-        <button className="secondary" onClick={addOption}>
-          + Добавить вариант
-        </button>
-
-        <button
-          className="primary"
-          onClick={createPoll}
-          disabled={loading}
-        >
-          {loading ? "Создаём..." : "Создать голосование"}
-        </button>
-      </main>
-    );
-  }
-
-  if (screen === "poll") {
-    return (
-      <main className="app">
-        <button className="back" onClick={() => setScreen("home")}>
-          ← На главную
-        </button>
-
-        <h1>{title}</h1>
-
-        <p className="subtitle">
-          Выберите один вариант:
-        </p>
-
-        <div className="poll-options">
-          {options.map((option, index) => (
-            <button
-              key={index}
-              className="poll-option"
-              onClick={() => vote(index)}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-
-        {createdPollId && (
-          <p className="poll-id">
-            ID голосования: {createdPollId}
-          </p>
-        )}
-      </main>
-    );
-  }
-
-  return (
-    <main className="app">
-      <div className="logo">🗳️</div>
-
-      <h1>SmartVoter</h1>
-
-      <p className="subtitle">
-        Создавай голосования с продвинутыми способами
-        подсчёта голосов.
-      </p>
-
-      <button
-        className="primary"
-        onClick={() => setScreen("create")}
-      >
-        Создать голосование
-      </button>
-
-      <button
-        className="secondary"
-        onClick={() => alert("Здесь будут твои голосования")}
-      >
-        Мои голосования
-      </button>
-    </main>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+            onChange={(e) =>
+              updateOption(index, e.
+```
