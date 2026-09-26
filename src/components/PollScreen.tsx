@@ -13,6 +13,31 @@ type Props = {
   onShare: () => void;
 };
 
+function getVotesText(count: number): string {
+  const lastTwo = count % 100;
+  const lastOne = count % 10;
+
+  if (
+    lastTwo >= 11 &&
+    lastTwo <= 14
+  ) {
+    return "голосов";
+  }
+
+  if (lastOne === 1) {
+    return "голос";
+  }
+
+  if (
+    lastOne >= 2 &&
+    lastOne <= 4
+  ) {
+    return "голоса";
+  }
+
+  return "голосов";
+}
+
 export default function PollScreen({
   title,
   pollId,
@@ -47,8 +72,12 @@ export default function PollScreen({
           <button
             key={option.id}
             className="poll-option"
-            onClick={() => onVote(option.id)}
-            disabled={voted || loading}
+            onClick={() =>
+              onVote(option.id)
+            }
+            disabled={
+              voted || loading
+            }
           >
             {option.text}
           </button>
@@ -83,7 +112,8 @@ export default function PollScreen({
               </span>
 
               <strong>
-                {count} голосов
+                {count}{" "}
+                {getVotesText(count)}
               </strong>
             </div>
           );
