@@ -11,6 +11,25 @@ type PollOption = {
   position: number;
 };
 
+declare global {
+  interface Window {
+    Telegram?: {
+      WebApp?: {
+        ready: () => void;
+        expand: () => void;
+        initData: string;
+        initDataUnsafe?: {
+          user?: {
+            id: number;
+            first_name?: string;
+            username?: string;
+          };
+        };
+      };
+    };
+  }
+}
+
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [title, setTitle] = useState("");
@@ -22,6 +41,13 @@ function App() {
 
   const [loading, setLoading] = useState(false);
   const [voted, setVoted] = useState(false);
+
+  const telegramUserId =
+    window.Telegram?.WebApp?.initDataUnsafe?.user?.id ?? null;
+
+  const telegramName =
+    window.Telegram?.WebApp?.initDataUnsafe?.user?.first_name ??
+    "пользователь";
 
   const addOption = () => {
     setOptions([...options, ""]);
@@ -76,6 +102,7 @@ function App() {
         .insert({
           title: title.trim(),
           voting_method: "plurality",
+          creator_telegram_id: telegramUserId,
         })
         .select()
         .single();
@@ -138,13 +165,18 @@ function App() {
       return;
     }
 
+    if (!telegramUserId) {
+      alert("Не удалось определить Telegram-пользователя");
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from("votes")
         .insert({
           poll_id: createdPollId,
           option_id: optionId,
-          telegram_user_id: Date.now(),
+          telegram_user_id: telegramUserId,
         });
 
       if (error) {
@@ -162,7 +194,7 @@ function App() {
 
       await loadResults(createdPollId);
 
-      alert("Голос принят! 🗳️");
+      alert(`Голос принят, ${telegramName}! 🗳️`);
     } catch (error: any) {
       console.error("VOTE ERROR:", error);
 
@@ -301,8 +333,8 @@ function App() {
       <h1>SmartVoter</h1>
 
       <p className="subtitle">
-        Создавай голосования с продвинутыми способами
-        подсчёта голосов.
+        Привет, {telegramName}! Создавай голосования
+        с продвинутыми способами подсчёта голосов.
       </p>
 
       <button
@@ -323,6 +355,9 @@ function App() {
     </main>
   );
 }
+
+window.Telegram?.WebApp?.ready();
+window.Telegram?.WebApp?.expand();
 
 ReactDOM.createRoot(
   document.getElementById("root")!
