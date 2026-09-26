@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import {
   DndContext,
   closestCenter,
@@ -7,9 +9,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 
-import type {
-  DragEndEvent,
-} from "@dnd-kit/core";
+import type { DragEndEvent } from "@dnd-kit/core";
 
 import {
   SortableContext,
@@ -109,6 +109,13 @@ export default function RankedPollScreen({
   setScreen,
   onVote,
 }: Props) {
+  const [
+    orderedOptions,
+    setOrderedOptions,
+  ] = useState<PollOption[]>(
+    options
+  );
+
   const sensors =
     useSensors(
       useSensor(
@@ -147,15 +154,17 @@ export default function RankedPollScreen({
     }
 
     const oldIndex =
-      options.findIndex(
+      orderedOptions.findIndex(
         (option) =>
-          option.id === active.id
+          option.id ===
+          active.id
       );
 
     const newIndex =
-      options.findIndex(
+      orderedOptions.findIndex(
         (option) =>
-          option.id === over.id
+          option.id ===
+          over.id
       );
 
     if (
@@ -165,63 +174,15 @@ export default function RankedPollScreen({
       return;
     }
 
-    const newOrder =
+    setOrderedOptions(
       arrayMove(
-        options,
+        orderedOptions,
         oldIndex,
         newIndex
-      );
-
-    onReorder(newOrder);
+      )
+    );
   };
 
-  const onReorder = (
-    newOrder: PollOption[]
-  ) => {
-    setOrderedOptions(newOrder);
-  };
-
-  return (
-    <RankedContent
-      title={title}
-      options={options}
-      voted={voted}
-      loading={loading}
-      setScreen={setScreen}
-      onVote={onVote}
-      sensors={sensors}
-      handleDragEnd={
-        handleDragEnd
-      }
-    />
-  );
-}
-
-function RankedContent({
-  title,
-  options,
-  voted,
-  loading,
-  setScreen,
-  onVote,
-  sensors,
-  handleDragEnd,
-}: {
-  title: string;
-  options: PollOption[];
-  voted: boolean;
-  loading: boolean;
-  setScreen: (screen: Screen) => void;
-  onVote: (
-    orderedOptions: PollOption[]
-  ) => void;
-  sensors: ReturnType<
-    typeof useSensors
-  >;
-  handleDragEnd: (
-    event: DragEndEvent
-  ) => void;
-}) {
   return (
     <main className="app">
       <button
@@ -261,7 +222,7 @@ function RankedContent({
         }
       >
         <SortableContext
-          items={options.map(
+          items={orderedOptions.map(
             (option) =>
               option.id
           )}
@@ -270,7 +231,7 @@ function RankedContent({
           }
         >
           <div className="poll-options">
-            {options.map(
+            {orderedOptions.map(
               (
                 option,
                 index
@@ -300,7 +261,9 @@ function RankedContent({
         <button
           className="primary"
           onClick={() =>
-            onVote(options)
+            onVote(
+              orderedOptions
+            )
           }
           disabled={loading}
         >
