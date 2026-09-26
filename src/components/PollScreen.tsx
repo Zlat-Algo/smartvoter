@@ -1,238 +1,274 @@
+import {
+  useEffect,
+  useState,
+} from "react";
+
 import type {
+  Poll,
   PollOption,
   Screen,
 } from "../types/poll";
 
 type Props = {
-  title: string;
-  pollId: string;
+  poll: Poll;
   options: PollOption[];
-  voteCounts: Record<string, number>;
-  totalVotes: number;
   voted: boolean;
   loading: boolean;
-  showResults: boolean;
-  pollExpired: boolean;
-  allowRevoting: boolean;
-  endsAt: string | null;
-  setScreen: (
-    screen: Screen
-  ) => void;
+  now: number;
+  voteCounts: Record<
+    string,
+    number
+  >;
+  setScreen: (screen: Screen) => void;
   onVote: (
     optionId: string
-  ) => void;
+  ) => Promise<void>;
   onShare: () => void;
 };
 
-function getVotesText(
-  count: number
-): string {
-  const lastTwo =
-    count % 100;
-  const lastOne =
-    count % 10;
-
-  if (
-    lastTwo >= 11 &&
-    lastTwo <= 14
-  ) {
-    return "голосов";
-  }
-
-  if (
-    lastOne === 1
-  ) {
-    return "голос";
-  }
-
-  if (
-    lastOne >= 2 &&
-    lastOne <= 4
-  ) {
-    return "голоса";
-  }
-
-  return "голосов";
-}
-
 function getTimeText(
-  endsAt: string | null
-): string {
+  endsAt: string | null | undefined
+) {
   if (!endsAt) {
-    return "♾️ Без ограничения";
+    return "Без ограничения";
   }
 
   const difference =
     new Date(
       endsAt
-    ).getTime() -
-    Date.now();
+    ).getTime() - Date.now();
 
-  if (
-    difference <= 0
-  ) {
-    return "⏰ Голосование завершено";
+  if (difference <= 0) {
+    return "Голосование завершено";
   }
 
   const minutes =
-    Math.ceil(
-      difference /
-        60000
+    Math.floor(
+      difference / 60000
     );
-
-  if (
-    minutes < 60
-  ) {
-    return `⏳ Осталось ${minutes} мин.`;
-  }
-
-  const hours =
-    Math.ceil(
-      minutes / 60
-    );
-
-  if (
-    hours < 24
-  ) {
-    return `⏳ Осталось ${hours} ч.`;
-  }
 
   const days =
-    Math.ceil(
-      hours / 24
+    Math.floor(
+      minutes / 1440
     );
 
-  return `⏳ Осталось ${days} дн.`;
+  const hours =
+    Math.floor(
+      (minutes % 1440) / 60
+    );
+
+  const mins =
+    minutes % 60;
+
+  if (days > 0) {
+    return `${days} д ${hours} ч`;
+  }
+
+  if (hours > 0) {
+    return `${hours} ч ${mins} мин`;
+  }
+
+  return `${Math.max(
+    1,
+    mins
+  )} мин`;
 }
 
 export default function PollScreen({
-  title,
-  pollId,
+  poll,
   options,
-  voteCounts,
-  totalVotes,
   voted,
   loading,
-  showResults,
-  pollExpired,
-  allowRevoting,
-  endsAt,
+  now,
+  voteCounts,
   setScreen,
   onVote,
   onShare,
 }: Props) {
-  const maxVotes =
-    Math.max(
-      ...options.map(
-        (option) =>
-          voteCounts[
-            option.id
-          ] || 0
-      ),
+  const [selectedOption, setSelectedOption] =
+    useState<string | null>(
+      null
+    );
+
+  const pollExpired =
+    !!poll.ends_at &&
+    new Date(
+      poll.ends_at
+    ).getTime() <= now;
+
+  const showResults =
+    poll.results_visibility ===
+      "always" ||
+    voted ||
+    pollExpired;
+
+  const totalVotes =
+    Object.values(
+      voteCounts
+    ).reduce(
+      (sum, count) =>
+        sum + count,
       0
     );
+
+  const submit = async () => {
+    if (!selectedOption) {
+      alert(
+        "Выберите вариант."
+      );
+      return;
+    }
+
+    await onVote(
+      selectedOption
+    );
+
+    setSelectedOption(null);
+  };
+
+  useEffect(() => {
+    setSelectedOption(null);
+  }, [poll.id]);
 
   return (
     <main className="app">
       <button
         className="back"
         onClick={() =>
-          setScreen(
-            "home"
-          )
+          setScreen("home")
         }
       >
-        ← На главную
+        ← Назад
       </button>
 
       <h1>
-        {title}
+        {poll.title}
       </h1>
 
-      <p className="poll-deadline">
-        {getTimeText(
-          endsAt
-        )}
-      </p>
-
-      {pollExpired ? (
-        <p className="subtitle">
-          ⏰ Голосование
-          завершено.
-        </p>
-      ) : voted ? (
-        <p className="subtitle">
-          {allowRevoting
-            ? "✅ Ваш голос принят. Вы можете изменить его."
-            : "✅ Ваш голос принят!"}
-        </p>
-      ) : (
-        <p className="subtitle">
-          Выберите один
-          вариант:
-        </p>
-      )}
-
-      {!pollExpired && (
-        <div className="poll-options">
-          {options.map(
-            (option) => (
-              <button
-                key={
-                  option.id
-                }
-                className="poll-option"
-                onClick={() =>
-                  onVote(
-                    option.id
-                  )
-                }
-                disabled={
-                  loading
-                }
-              >
-                {option.text}
-              </button>
-            )
-          )}
-        </div>
-      )}
-
-      <button
-        className="secondary"
-        onClick={
-          onShare
-        }
+      <div
+        style={{
+          marginTop: 8,
+          marginBottom: 18,
+          padding: "10px 12px",
+          borderRadius: 12,
+          background:
+            pollExpired
+              ? "rgba(255, 80, 80, 0.10)"
+              : "rgba(100, 150, 255, 0.10)",
+          fontSize: 14,
+        }}
       >
-        📤 Поделиться
-        голосованием
-      </button>
+        {pollExpired
+          ? "🔴 Голосование завершено"
+          : `⏳ Осталось: ${getTimeText(
+              poll.ends_at
+            )}`}
+      </div>
 
-      {showResults ? (
-        <>
+      {!pollExpired &&
+        (!voted ||
+          poll.allow_revoting) && (
+          <>
+            {voted &&
+              poll.allow_revoting && (
+                <p className="subtitle">
+                  Ты уже голосовал.
+                  Можно изменить свой
+                  выбор.
+                </p>
+              )}
+
+            <div
+              style={{
+                display: "flex",
+                flexDirection:
+                  "column",
+                gap: 10,
+              }}
+            >
+              {options.map(
+                (option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={
+                      selectedOption ===
+                      option.id
+                        ? "primary"
+                        : "secondary"
+                    }
+                    onClick={() =>
+                      setSelectedOption(
+                        option.id
+                      )
+                    }
+                  >
+                    {option.text}
+                  </button>
+                )
+              )}
+            </div>
+
+            <button
+              className="primary"
+              onClick={submit}
+              disabled={
+                loading ||
+                !selectedOption
+              }
+              style={{
+                marginTop: 14,
+              }}
+            >
+              {loading
+                ? "Сохраняем..."
+                : voted
+                ? "Изменить голос"
+                : "Проголосовать"}
+            </button>
+          </>
+        )}
+
+      {voted &&
+        !poll.allow_revoting &&
+        !pollExpired && (
+          <p className="subtitle">
+            ✅ Ваш голос принят.
+          </p>
+        )}
+
+      {showResults && (
+        <section
+          style={{
+            marginTop: 24,
+          }}
+        >
           <h2>
-            📊 Результаты
+            Результаты
           </h2>
 
           <p className="subtitle">
-            Всего{" "}
-            {totalVotes}{" "}
-            {getVotesText(
-              totalVotes
-            )}
+            Всего голосов:{" "}
+            {totalVotes}
           </p>
 
-          <div className="results">
+          <div
+            style={{
+              display: "flex",
+              flexDirection:
+                "column",
+              gap: 10,
+            }}
+          >
             {options.map(
               (option) => {
                 const count =
                   voteCounts[
                     option.id
-                  ] || 0;
+                  ] ?? 0;
 
-                const percentage =
-                  totalVotes >
-                  0
+                const percent =
+                  totalVotes > 0
                     ? Math.round(
                         (count /
                           totalVotes) *
@@ -240,71 +276,86 @@ export default function PollScreen({
                       )
                     : 0;
 
-                const isWinner =
-                  maxVotes >
-                    0 &&
-                  count ===
-                    maxVotes;
-
                 return (
                   <div
-                    className="result-card"
-                    key={
-                      option.id
-                    }
+                    key={option.id}
                   >
-                    <div className="result-header">
+                    <div
+                      style={{
+                        display:
+                          "flex",
+                        justifyContent:
+                          "space-between",
+                        marginBottom:
+                          4,
+                      }}
+                    >
                       <span>
-                        {isWinner
-                          ? "🏆 "
-                          : ""}
                         {
                           option.text
                         }
                       </span>
 
                       <strong>
-                        {
-                          percentage
-                        }%
+                        {count} ·{" "}
+                        {percent}%
                       </strong>
                     </div>
 
-                    <div className="result-bar">
+                    <div
+                      style={{
+                        height: 8,
+                        borderRadius:
+                          999,
+                        background:
+                          "rgba(128,128,128,0.18)",
+                        overflow:
+                          "hidden",
+                      }}
+                    >
                       <div
-                        className="result-bar-fill"
                         style={{
-                          width: `${percentage}%`,
+                          width: `${percent}%`,
+                          height:
+                            "100%",
+                          borderRadius:
+                            999,
+                          background:
+                            "currentColor",
                         }}
                       />
-                    </div>
-
-                    <div className="result-count">
-                      {count}{" "}
-                      {getVotesText(
-                        count
-                      )}
                     </div>
                   </div>
                 );
               }
             )}
           </div>
-        </>
-      ) : (
-        <p className="subtitle">
-          🔒 Результаты
-          появятся после
-          {pollExpired
-            ? " окончания голосования."
-            : " голосования."}
-        </p>
+        </section>
       )}
 
-      <p className="poll-id">
-        ID голосования:{" "}
-        {pollId}
-      </p>
+      {!showResults &&
+        !pollExpired && (
+          <p
+            className="subtitle"
+            style={{
+              marginTop: 22,
+            }}
+          >
+            Результаты будут
+            доступны после
+            голосования.
+          </p>
+        )}
+
+      <button
+        className="secondary"
+        onClick={onShare}
+        style={{
+          marginTop: 24,
+        }}
+      >
+        📤 Поделиться
+      </button>
     </main>
   );
 }
