@@ -25,7 +25,9 @@ export default function MyPolls({
       <h1>Мои голосования</h1>
 
       {loading ? (
-        <p className="subtitle">Загружаем...</p>
+        <p className="subtitle">
+          Загружаем...
+        </p>
       ) : polls.length === 0 ? (
         <p className="subtitle">
           У тебя пока нет голосований.
@@ -41,7 +43,9 @@ export default function MyPolls({
               <strong>{poll.title}</strong>
 
               <span>
-                Метод: обычное голосование
+                {poll.voting_method === "ranked"
+                  ? "Метод: ранжирование 🏆"
+                  : "Метод: обычное голосование 🗳️"}
               </span>
             </button>
           ))}
