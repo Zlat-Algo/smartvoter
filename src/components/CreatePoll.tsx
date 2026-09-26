@@ -59,7 +59,8 @@ export default function CreatePoll({
     if (
       value.trim() &&
       index ===
-        options.length - 1
+        options.length - 1 &&
+      options.length < 20
     ) {
       copy.push("");
     }
