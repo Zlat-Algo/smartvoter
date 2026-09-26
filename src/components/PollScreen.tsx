@@ -14,6 +14,7 @@ type Props = {
   showResults: boolean;
   pollExpired: boolean;
   allowRevoting: boolean;
+  endsAt: string | null;
   setScreen: (
     screen: Screen
   ) => void;
@@ -115,6 +116,7 @@ export default function PollScreen({
   showResults,
   pollExpired,
   allowRevoting,
+  endsAt,
   setScreen,
   onVote,
   onShare,
@@ -149,10 +151,7 @@ export default function PollScreen({
 
       <p className="poll-deadline">
         {getTimeText(
-          (
-            window as any
-          ).__smartVoterEndsAt ||
-          null
+          endsAt
         )}
       </p>
 
@@ -164,7 +163,7 @@ export default function PollScreen({
       ) : voted ? (
         <p className="subtitle">
           {allowRevoting
-            ? "✅ Ваш голос принят. При желании его можно изменить."
+            ? "✅ Ваш голос принят. Вы можете изменить его."
             : "✅ Ваш голос принят!"}
         </p>
       ) : (
