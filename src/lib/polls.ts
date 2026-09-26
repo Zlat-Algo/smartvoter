@@ -10,7 +10,9 @@ export async function createPoll(
   title: string,
   options: string[],
   telegramUserId: number,
-  votingMethod: VotingMethod
+  votingMethod: VotingMethod,
+  resultsVisibility: "always" | "after_vote",
+  endsAt: string | null
 ): Promise<{
   poll: Poll;
   options: PollOption[];
@@ -22,6 +24,9 @@ export async function createPoll(
         title: title.trim(),
         voting_method: votingMethod,
         creator_telegram_id: telegramUserId,
+        results_visibility:
+          resultsVisibility,
+        ends_at: endsAt,
       })
       .select()
       .single();
@@ -36,11 +41,13 @@ export async function createPoll(
   } = await supabase
     .from("poll_options")
     .insert(
-      options.map((text, index) => ({
-        poll_id: poll.id,
-        text: text.trim(),
-        position: index,
-      }))
+      options.map(
+        (text, index) => ({
+          poll_id: poll.id,
+          text: text.trim(),
+          position: index,
+        })
+      )
     )
     .select();
 
@@ -57,12 +64,14 @@ export async function createPoll(
   const sortedOptions =
     [...createdOptions].sort(
       (a, b) =>
-        a.position - b.position
+        a.position -
+        b.position
     );
 
   return {
     poll,
-    options: sortedOptions,
+    options:
+      sortedOptions,
   };
 }
 
