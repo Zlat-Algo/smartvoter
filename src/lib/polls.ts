@@ -131,7 +131,85 @@ export async function getMyPolls(
     throw error;
   }
 
-  return data || [];
+  const polls = data || [];
+
+  const pollsWithCounts =
+    await Promise.all(
+      polls.map(async (poll) => {
+        if (
+          poll.voting_method ===
+          "ranked"
+        ) {
+          const {
+            data: rankedVotes,
+            error: rankedError,
+          } = await supabase
+            .from("ranked_votes")
+            .select(
+              "telegram_user_id"
+            )
+            .eq(
+              "poll_id",
+              poll.id
+            );
+
+          if (rankedError) {
+            throw rankedError;
+          }
+
+          const uniqueUsers =
+            new Set(
+              (rankedVotes || []).map(
+                (vote) =>
+                  Number(
+                    vote.telegram_user_id
+                  )
+              )
+            );
+
+          return {
+            ...poll,
+            participant_count:
+              uniqueUsers.size,
+          };
+        }
+
+        const {
+          data: votes,
+          error: votesError,
+        } = await supabase
+          .from("votes")
+          .select(
+            "telegram_user_id"
+          )
+          .eq(
+            "poll_id",
+            poll.id
+          );
+
+        if (votesError) {
+          throw votesError;
+        }
+
+        const uniqueUsers =
+          new Set(
+            (votes || []).map(
+              (vote) =>
+                Number(
+                  vote.telegram_user_id
+                )
+            )
+          );
+
+        return {
+          ...poll,
+          participant_count:
+            uniqueUsers.size,
+        };
+      })
+    );
+
+  return pollsWithCounts;
 }
 
 export async function getResults(
