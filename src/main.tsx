@@ -15,9 +15,11 @@ function App() {
   const [screen, setScreen] = useState<Screen>("home");
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
+
   const [createdPollId, setCreatedPollId] = useState<string | null>(null);
   const [pollOptions, setPollOptions] = useState<PollOption[]>([]);
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+
   const [loading, setLoading] = useState(false);
   const [voted, setVoted] = useState(false);
 
@@ -31,16 +33,14 @@ function App() {
     setOptions(copy);
   };
 
-  const loadResults = async () => {
-    if (!createdPollId) return;
-
+  const loadResults = async (pollId: string) => {
     const { data, error } = await supabase
       .from("votes")
       .select("option_id")
-      .eq("poll_id", createdPollId);
+      .eq("poll_id", pollId);
 
     if (error) {
-      console.error(error);
+      console.error("RESULTS ERROR:", error);
       return;
     }
 
@@ -80,33 +80,36 @@ function App() {
         .select()
         .single();
 
-      if (pollError) throw pollError;
+      if (pollError) {
+        throw pollError;
+      }
 
-      const { data: createdOptions, error: optionsError } = await supabase
-        .from("poll_options")
-        .insert(
-          validOptions.map((text, index) => ({
-            poll_id: poll.id,
-            text,
-            position: index,
-          }))
-        )
-        .select();
+      const { data: createdOptions, error: optionsError } =
+        await supabase
+          .from("poll_options")
+          .insert(
+            validOptions.map((text, index) => ({
+              poll_id: poll.id,
+              text,
+              position: index,
+            }))
+          )
+          .select();
 
-      if (optionsError) throw optionsError;
+      if (optionsError) {
+        throw optionsError;
+      }
 
       if (!createdOptions) {
         throw new Error("Варианты не создались");
       }
 
-      setCreatedPollId(poll.id);
-
-      setPollOptions(
-        [...createdOptions].sort(
-          (a, b) => a.position - b.position
-        )
+      const sortedOptions = [...createdOptions].sort(
+        (a, b) => a.position - b.position
       );
 
+      setCreatedPollId(poll.id);
+      setPollOptions(sortedOptions);
       setOptions(validOptions);
       setVoteCounts({});
       setVoted(false);
@@ -148,6 +151,7 @@ function App() {
         if (error.code === "23505") {
           alert("Вы уже голосовали!");
         } else {
+          console.error("VOTE ERROR:", error);
           alert(`Ошибка: ${error.message}`);
         }
 
@@ -155,11 +159,12 @@ function App() {
       }
 
       setVoted(true);
-      await loadResults();
+
+      await loadResults(createdPollId);
 
       alert("Голос принят! 🗳️");
     } catch (error: any) {
-      console.error(error);
+      console.error("VOTE ERROR:", error);
 
       alert(
         `Не удалось отправить голос:\n\n${
@@ -219,7 +224,9 @@ function App() {
           onClick={createPoll}
           disabled={loading}
         >
-          {loading ? "Создаём..." : "Создать голосование"}
+          {loading
+            ? "Создаём..."
+            : "Создать голосование"}
         </button>
       </main>
     );
@@ -307,7 +314,9 @@ function App() {
 
       <button
         className="secondary"
-        onClick={() => alert("Здесь будут твои голосования")}
+        onClick={() =>
+          alert("Здесь будут твои голосования")
+        }
       >
         Мои голосования
       </button>
