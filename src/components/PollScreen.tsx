@@ -70,15 +70,21 @@ export default function PollScreen({
 
       <div className="results">
         {options.map((option) => {
-          const count = voteCounts[option.id] || 0;
+          const count =
+            voteCounts[option.id] || 0;
 
           return (
             <div
               className="result-row"
               key={option.id}
             >
-              <span>{option.text}</span>
-              <strong>{count}</strong>
+              <span>
+                {option.text}
+              </span>
+
+              <strong>
+                {count} голосов
+              </strong>
             </div>
           );
         })}
