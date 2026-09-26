@@ -83,7 +83,49 @@ function App() {
       setLoading(false);
     }
   };
+const vote = async (optionIndex: number) => {
+  if (!createdPollId) {
+    alert("Не найдено голосование");
+    return;
+  }
 
+  try {
+    const optionId = (
+      await supabase
+        .from("poll_options")
+        .select("id")
+        .eq("poll_id", createdPollId)
+        .eq("position", optionIndex)
+        .single()
+    ).data?.id;
+
+    if (!optionId) {
+      alert("Не удалось найти вариант");
+      return;
+    }
+
+    const { error } = await supabase.from("votes").insert({
+      poll_id: createdPollId,
+      option_id: optionId,
+      telegram_user_id: Date.now()
+    });
+
+    if (error) {
+      if (error.code === "23505") {
+        alert("Вы уже голосовали!");
+      } else {
+        console.error(error);
+        alert(`Ошибка: ${error.message}`);
+      }
+      return;
+    }
+
+    alert("Голос принят! 🗳️");
+  } catch (error) {
+    console.error(error);
+    alert("Не удалось отправить голос");
+  }
+};
   if (screen === "create") {
     return (
       <main className="app">
@@ -145,7 +187,7 @@ function App() {
             <button
               key={index}
               className="poll-option"
-              onClick={() => alert(`Вы выбрали: ${option}`)}
+              onClick={() => vote(index)}
             >
               {option}
             </button>
