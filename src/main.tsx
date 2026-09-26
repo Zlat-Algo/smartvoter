@@ -3,12 +3,20 @@ import ReactDOM from "react-dom/client";
 import { supabase } from "./supabase";
 import "./style.css";
 
-type Screen = "home" | "create" | "poll";
+type Screen = "home" | "create" | "poll" | "myPolls";
 
 type PollOption = {
   id: string;
   text: string;
   position: number;
+};
+
+type Poll = {
+  id: string;
+  title: string;
+  voting_method: string;
+  creator_telegram_id: number | null;
+  created_at: string;
 };
 
 declare global {
@@ -32,12 +40,15 @@ declare global {
 
 function App() {
   const [screen, setScreen] = useState<Screen>("home");
+
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
 
   const [createdPollId, setCreatedPollId] = useState<string | null>(null);
   const [pollOptions, setPollOptions] = useState<PollOption[]>([]);
   const [voteCounts, setVoteCounts] = useState<Record<string, number>>({});
+
+  const [myPolls, setMyPolls] = useState<Poll[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [voted, setVoted] = useState(false);
@@ -77,6 +88,78 @@ function App() {
     }
 
     setVoteCounts(counts);
+  };
+
+  const openPoll = async (poll: Poll) => {
+    try {
+      setLoading(true);
+
+      const { data: optionsData, error } = await supabase
+        .from("poll_options")
+        .select("id, text, position")
+        .eq("poll_id", poll.id)
+        .order("position");
+
+      if (error) {
+        throw error;
+      }
+
+      setCreatedPollId(poll.id);
+      setTitle(poll.title);
+      setPollOptions(optionsData || []);
+      setVoteCounts({});
+      setVoted(false);
+
+      await loadResults(poll.id);
+
+      setScreen("poll");
+    } catch (error: any) {
+      console.error("OPEN POLL ERROR:", error);
+
+      alert(
+        `Не удалось открыть голосование:\n\n${
+          error?.message || JSON.stringify(error)
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadMyPolls = async () => {
+    if (!telegramUserId) {
+      alert("Не удалось определить Telegram-пользователя");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const { data, error } = await supabase
+        .from("polls")
+        .select(
+          "id, title, voting_method, creator_telegram_id, created_at"
+        )
+        .eq("creator_telegram_id", telegramUserId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw error;
+      }
+
+      setMyPolls(data || []);
+      setScreen("myPolls");
+    } catch (error: any) {
+      console.error("MY POLLS ERROR:", error);
+
+      alert(
+        `Не удалось загрузить голосования:\n\n${
+          error?.message || JSON.stringify(error)
+        }`
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const createPoll = async () => {
@@ -256,9 +339,7 @@ function App() {
           onClick={createPoll}
           disabled={loading}
         >
-          {loading
-            ? "Создаём..."
-            : "Создать голосование"}
+          {loading ? "Создаём..." : "Создать голосование"}
         </button>
       </main>
     );
@@ -326,6 +407,45 @@ function App() {
     );
   }
 
+  if (screen === "myPolls") {
+    return (
+      <main className="app">
+        <button
+          className="back"
+          onClick={() => setScreen("home")}
+        >
+          ← На главную
+        </button>
+
+        <h1>Мои голосования</h1>
+
+        {loading ? (
+          <p className="subtitle">Загружаем...</p>
+        ) : myPolls.length === 0 ? (
+          <p className="subtitle">
+            У тебя пока нет голосований.
+          </p>
+        ) : (
+          <div className="poll-list">
+            {myPolls.map((poll) => (
+              <button
+                key={poll.id}
+                className="poll-card"
+                onClick={() => openPoll(poll)}
+              >
+                <strong>{poll.title}</strong>
+
+                <span>
+                  Метод: обычное голосование
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </main>
+    );
+  }
+
   return (
     <main className="app">
       <div className="logo">🗳️</div>
@@ -346,11 +466,10 @@ function App() {
 
       <button
         className="secondary"
-        onClick={() =>
-          alert("Здесь будут твои голосования")
-        }
+        onClick={loadMyPolls}
+        disabled={loading}
       >
-        Мои голосования
+        {loading ? "Загружаем..." : "Мои голосования"}
       </button>
     </main>
   );
