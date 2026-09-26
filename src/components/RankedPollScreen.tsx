@@ -40,6 +40,8 @@ type Props = {
   loading: boolean;
   totalVoters: number;
   results: RankedResult[];
+  showResults: boolean;
+  pollExpired: boolean;
   setScreen: (screen: Screen) => void;
   onVote: (
     orderedOptions: PollOption[]
@@ -71,7 +73,9 @@ function SortableOption({
 
   const style = {
     transform:
-      CSS.Transform.toString(transform),
+      CSS.Transform.toString(
+        transform
+      ),
     transition,
     touchAction:
       disabled
@@ -117,6 +121,8 @@ export default function RankedPollScreen({
   loading,
   totalVoters,
   results,
+  showResults,
+  pollExpired,
   setScreen,
   onVote,
   onShare,
@@ -129,7 +135,9 @@ export default function RankedPollScreen({
   );
 
   useEffect(() => {
-    setOrderedOptions(options);
+    setOrderedOptions(
+      options
+    );
   }, [options]);
 
   const sensors =
@@ -172,13 +180,15 @@ export default function RankedPollScreen({
     const oldIndex =
       orderedOptions.findIndex(
         (option) =>
-          option.id === active.id
+          option.id ===
+          active.id
       );
 
     const newIndex =
       orderedOptions.findIndex(
         (option) =>
-          option.id === over.id
+          option.id ===
+          over.id
       );
 
     if (
@@ -212,7 +222,15 @@ export default function RankedPollScreen({
         {title}
       </h1>
 
-      {!voted ? (
+      {pollExpired ? (
+        <p className="subtitle">
+          ⏰ Голосование завершено.
+        </p>
+      ) : voted ? (
+        <p className="subtitle">
+          ✅ Ваш голос уже принят.
+        </p>
+      ) : (
         <>
           <p className="subtitle">
             Расставьте варианты
@@ -284,22 +302,20 @@ export default function RankedPollScreen({
               ? "Отправляем..."
               : "Проголосовать"}
           </button>
-
-          <button
-            className="secondary"
-            onClick={onShare}
-          >
-            📤 Поделиться голосованием
-          </button>
         </>
-      ) : (
-        <>
-          <p className="subtitle">
-            ✅ Ваш голос уже принят.
-          </p>
+      )}
 
+      <button
+        className="secondary"
+        onClick={onShare}
+      >
+        📤 Поделиться голосованием
+      </button>
+
+      {showResults ? (
+        <>
           <h2>
-            Результаты
+            📊 Результаты
           </h2>
 
           <p className="subtitle">
@@ -308,68 +324,79 @@ export default function RankedPollScreen({
           </p>
 
           <div className="ranked-results">
-  {results.map(
-    (
-      result,
-      index
-    ) => {
-      const maxScore =
-        results[0]?.score || 0;
+            {results.map(
+              (
+                result,
+                index
+              ) => {
+                const maxScore =
+                  results[0]?.score ||
+                  0;
 
-      const percentage =
-        maxScore > 0
-          ? Math.round(
-              (result.score /
-                maxScore) *
-                100
-            )
-          : 0;
+                const percentage =
+                  maxScore > 0
+                    ? Math.round(
+                        (result.score /
+                          maxScore) *
+                          100
+                      )
+                    : 0;
 
-      const medals = [
-        "🥇",
-        "🥈",
-        "🥉",
-      ];
+                const medals = [
+                  "🥇",
+                  "🥈",
+                  "🥉",
+                ];
 
-      return (
-        <div
-          className={`ranked-result-card ${
-            index < 3
-              ? "top-result"
-              : ""
-          }`}
-          key={
-            result.option.id
-          }
-        >
-          <div className="ranked-result-header">
-            <span className="ranked-place">
-              {medals[index] ||
-                `${index + 1}.`}
-            </span>
+                return (
+                  <div
+                    className={`ranked-result-card ${
+                      index < 3
+                        ? "top-result"
+                        : ""
+                    }`}
+                    key={
+                      result.option.id
+                    }
+                  >
+                    <div className="ranked-result-header">
+                      <span className="ranked-place">
+                        {medals[index] ||
+                          `${
+                            index +
+                            1
+                          }.`}
+                      </span>
 
-            <span className="ranked-option-name">
-              {result.option.text}
-            </span>
+                      <span className="ranked-option-name">
+                        {
+                          result
+                            .option
+                            .text
+                        }
+                      </span>
 
-            <strong className="ranked-score">
-              {result.score} б.
-            </strong>
+                      <strong className="ranked-score">
+                        {
+                          result.score
+                        }{" "}
+                        б.
+                      </strong>
+                    </div>
+
+                    <div className="ranked-result-bar">
+                      <div
+                        className="ranked-result-bar-fill"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              }
+            )}
           </div>
-
-          <div className="ranked-result-bar">
-            <div
-              className="ranked-result-bar-fill"
-              style={{
-                width: `${percentage}%`,
-              }}
-            />
-          </div>
-        </div>
-      );
-    }
-  )}
-</div>
 
           <p className="subtitle">
             Баллы рассчитаны по
@@ -377,14 +404,13 @@ export default function RankedPollScreen({
             высокое место даёт
             больше баллов.
           </p>
-
-          <button
-            className="secondary"
-            onClick={onShare}
-          >
-            📤 Поделиться голосованием
-          </button>
         </>
+      ) : (
+        <p className="subtitle">
+          🔒 Результаты будут
+          доступны после
+          голосования.
+        </p>
       )}
     </main>
   );
