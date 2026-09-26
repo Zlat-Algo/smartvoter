@@ -13,16 +13,23 @@ type Props = {
   loading: boolean;
   showResults: boolean;
   pollExpired: boolean;
-  setScreen: (screen: Screen) => void;
-  onVote: (optionId: string) => void;
+  allowRevoting: boolean;
+  setScreen: (
+    screen: Screen
+  ) => void;
+  onVote: (
+    optionId: string
+  ) => void;
   onShare: () => void;
 };
 
 function getVotesText(
   count: number
 ): string {
-  const lastTwo = count % 100;
-  const lastOne = count % 10;
+  const lastTwo =
+    count % 100;
+  const lastOne =
+    count % 10;
 
   if (
     lastTwo >= 11 &&
@@ -31,7 +38,9 @@ function getVotesText(
     return "голосов";
   }
 
-  if (lastOne === 1) {
+  if (
+    lastOne === 1
+  ) {
     return "голос";
   }
 
@@ -45,6 +54,56 @@ function getVotesText(
   return "голосов";
 }
 
+function getTimeText(
+  endsAt: string | null
+): string {
+  if (!endsAt) {
+    return "♾️ Без ограничения";
+  }
+
+  const difference =
+    new Date(
+      endsAt
+    ).getTime() -
+    Date.now();
+
+  if (
+    difference <= 0
+  ) {
+    return "⏰ Голосование завершено";
+  }
+
+  const minutes =
+    Math.ceil(
+      difference /
+        60000
+    );
+
+  if (
+    minutes < 60
+  ) {
+    return `⏳ Осталось ${minutes} мин.`;
+  }
+
+  const hours =
+    Math.ceil(
+      minutes / 60
+    );
+
+  if (
+    hours < 24
+  ) {
+    return `⏳ Осталось ${hours} ч.`;
+  }
+
+  const days =
+    Math.ceil(
+      hours / 24
+    );
+
+  return `⏳ Осталось ${days} дн.`;
+}
+
 export default function PollScreen({
   title,
   pollId,
@@ -55,77 +114,106 @@ export default function PollScreen({
   loading,
   showResults,
   pollExpired,
+  allowRevoting,
   setScreen,
   onVote,
   onShare,
 }: Props) {
-  const maxVotes = Math.max(
-    ...options.map(
-      (option) =>
-        voteCounts[option.id] || 0
-    ),
-    0
-  );
+  const maxVotes =
+    Math.max(
+      ...options.map(
+        (option) =>
+          voteCounts[
+            option.id
+          ] || 0
+      ),
+      0
+    );
 
   return (
     <main className="app">
       <button
         className="back"
         onClick={() =>
-          setScreen("home")
+          setScreen(
+            "home"
+          )
         }
       >
         ← На главную
       </button>
 
-      <h1>{title}</h1>
+      <h1>
+        {title}
+      </h1>
+
+      <p className="poll-deadline">
+        {getTimeText(
+          (
+            window as any
+          ).__smartVoterEndsAt ||
+          null
+        )}
+      </p>
 
       {pollExpired ? (
         <p className="subtitle">
-          ⏰ Голосование завершено.
+          ⏰ Голосование
+          завершено.
         </p>
       ) : voted ? (
         <p className="subtitle">
-          ✅ Ваш голос принят!
+          {allowRevoting
+            ? "✅ Ваш голос принят. При желании его можно изменить."
+            : "✅ Ваш голос принят!"}
         </p>
       ) : (
         <p className="subtitle">
-          Выберите один вариант:
+          Выберите один
+          вариант:
         </p>
       )}
 
-      {!voted &&
-        !pollExpired && (
-          <div className="poll-options">
-            {options.map(
-              (option) => (
-                <button
-                  key={option.id}
-                  className="poll-option"
-                  onClick={() =>
-                    onVote(
-                      option.id
-                    )
-                  }
-                  disabled={loading}
-                >
-                  {option.text}
-                </button>
-              )
-            )}
-          </div>
-        )}
+      {!pollExpired && (
+        <div className="poll-options">
+          {options.map(
+            (option) => (
+              <button
+                key={
+                  option.id
+                }
+                className="poll-option"
+                onClick={() =>
+                  onVote(
+                    option.id
+                  )
+                }
+                disabled={
+                  loading
+                }
+              >
+                {option.text}
+              </button>
+            )
+          )}
+        </div>
+      )}
 
       <button
         className="secondary"
-        onClick={onShare}
+        onClick={
+          onShare
+        }
       >
-        📤 Поделиться голосованием
+        📤 Поделиться
+        голосованием
       </button>
 
       {showResults ? (
         <>
-          <h2>📊 Результаты</h2>
+          <h2>
+            📊 Результаты
+          </h2>
 
           <p className="subtitle">
             Всего{" "}
@@ -144,7 +232,8 @@ export default function PollScreen({
                   ] || 0;
 
                 const percentage =
-                  totalVotes > 0
+                  totalVotes >
+                  0
                     ? Math.round(
                         (count /
                           totalVotes) *
@@ -153,7 +242,8 @@ export default function PollScreen({
                     : 0;
 
                 const isWinner =
-                  maxVotes > 0 &&
+                  maxVotes >
+                    0 &&
                   count ===
                     maxVotes;
 
@@ -204,14 +294,17 @@ export default function PollScreen({
         </>
       ) : (
         <p className="subtitle">
-          🔒 Результаты будут
-          доступны после
-          голосования.
+          🔒 Результаты
+          появятся после
+          {pollExpired
+            ? " окончания голосования."
+            : " голосования."}
         </p>
       )}
 
       <p className="poll-id">
-        ID голосования: {pollId}
+        ID голосования:{" "}
+        {pollId}
       </p>
     </main>
   );
