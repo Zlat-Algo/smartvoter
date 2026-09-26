@@ -1,4 +1,7 @@
-import type { PollOption, Screen } from "../types/poll";
+import type {
+  PollOption,
+  Screen,
+} from "../types/poll";
 
 type Props = {
   title: string;
@@ -8,12 +11,16 @@ type Props = {
   totalVotes: number;
   voted: boolean;
   loading: boolean;
+  showResults: boolean;
+  pollExpired: boolean;
   setScreen: (screen: Screen) => void;
   onVote: (optionId: string) => void;
   onShare: () => void;
 };
 
-function getVotesText(count: number): string {
+function getVotesText(
+  count: number
+): string {
   const lastTwo = count % 100;
   const lastOne = count % 10;
 
@@ -46,6 +53,8 @@ export default function PollScreen({
   totalVotes,
   voted,
   loading,
+  showResults,
+  pollExpired,
   setScreen,
   onVote,
   onShare,
@@ -71,28 +80,41 @@ export default function PollScreen({
 
       <h1>{title}</h1>
 
-      <p className="subtitle">
-        {voted
-          ? "Ваш голос принят!"
-          : "Выберите один вариант:"}
-      </p>
-
-      {!voted && (
-        <div className="poll-options">
-          {options.map((option) => (
-            <button
-              key={option.id}
-              className="poll-option"
-              onClick={() =>
-                onVote(option.id)
-              }
-              disabled={loading}
-            >
-              {option.text}
-            </button>
-          ))}
-        </div>
+      {pollExpired ? (
+        <p className="subtitle">
+          ⏰ Голосование завершено.
+        </p>
+      ) : voted ? (
+        <p className="subtitle">
+          ✅ Ваш голос принят!
+        </p>
+      ) : (
+        <p className="subtitle">
+          Выберите один вариант:
+        </p>
       )}
+
+      {!voted &&
+        !pollExpired && (
+          <div className="poll-options">
+            {options.map(
+              (option) => (
+                <button
+                  key={option.id}
+                  className="poll-option"
+                  onClick={() =>
+                    onVote(
+                      option.id
+                    )
+                  }
+                  disabled={loading}
+                >
+                  {option.text}
+                </button>
+              )
+            )}
+          </div>
+        )}
 
       <button
         className="secondary"
@@ -101,67 +123,92 @@ export default function PollScreen({
         📤 Поделиться голосованием
       </button>
 
-      <h2>📊 Результаты</h2>
+      {showResults ? (
+        <>
+          <h2>📊 Результаты</h2>
 
-      <p className="subtitle">
-        Всего{" "}
-        {totalVotes}{" "}
-        {getVotesText(totalVotes)}
-      </p>
+          <p className="subtitle">
+            Всего{" "}
+            {totalVotes}{" "}
+            {getVotesText(
+              totalVotes
+            )}
+          </p>
 
-      <div className="results">
-        {options.map((option) => {
-          const count =
-            voteCounts[option.id] || 0;
+          <div className="results">
+            {options.map(
+              (option) => {
+                const count =
+                  voteCounts[
+                    option.id
+                  ] || 0;
 
-          const percentage =
-            totalVotes > 0
-              ? Math.round(
-                  (count /
-                    totalVotes) *
-                    100
-                )
-              : 0;
+                const percentage =
+                  totalVotes > 0
+                    ? Math.round(
+                        (count /
+                          totalVotes) *
+                          100
+                      )
+                    : 0;
 
-          const isWinner =
-            maxVotes > 0 &&
-            count === maxVotes;
+                const isWinner =
+                  maxVotes > 0 &&
+                  count ===
+                    maxVotes;
 
-          return (
-            <div
-              className="result-card"
-              key={option.id}
-            >
-              <div className="result-header">
-                <span>
-                  {isWinner
-                    ? "🏆 "
-                    : ""}
-                  {option.text}
-                </span>
+                return (
+                  <div
+                    className="result-card"
+                    key={
+                      option.id
+                    }
+                  >
+                    <div className="result-header">
+                      <span>
+                        {isWinner
+                          ? "🏆 "
+                          : ""}
+                        {
+                          option.text
+                        }
+                      </span>
 
-                <strong>
-                  {percentage}%
-                </strong>
-              </div>
+                      <strong>
+                        {
+                          percentage
+                        }%
+                      </strong>
+                    </div>
 
-              <div className="result-bar">
-                <div
-                  className="result-bar-fill"
-                  style={{
-                    width: `${percentage}%`,
-                  }}
-                />
-              </div>
+                    <div className="result-bar">
+                      <div
+                        className="result-bar-fill"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+                    </div>
 
-              <div className="result-count">
-                {count}{" "}
-                {getVotesText(count)}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                    <div className="result-count">
+                      {count}{" "}
+                      {getVotesText(
+                        count
+                      )}
+                    </div>
+                  </div>
+                );
+              }
+            )}
+          </div>
+        </>
+      ) : (
+        <p className="subtitle">
+          🔒 Результаты будут
+          доступны после
+          голосования.
+        </p>
+      )}
 
       <p className="poll-id">
         ID голосования: {pollId}
