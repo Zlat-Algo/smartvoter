@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   DndContext,
@@ -9,7 +9,9 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 
-import type { DragEndEvent } from "@dnd-kit/core";
+import type {
+  DragEndEvent,
+} from "@dnd-kit/core";
 
 import {
   SortableContext,
@@ -25,11 +27,19 @@ import type {
   Screen,
 } from "../types/poll";
 
+type RankedResult = {
+  option: PollOption;
+  score: number;
+  firstPlaces: number;
+};
+
 type Props = {
   title: string;
   options: PollOption[];
   voted: boolean;
   loading: boolean;
+  totalVoters: number;
+  results: RankedResult[];
   setScreen: (screen: Screen) => void;
   onVote: (
     orderedOptions: PollOption[]
@@ -68,12 +78,12 @@ function SortableOption({
       disabled
         ? "auto"
         : "none",
-    opacity: isDragging
-      ? 0.6
-      : 1,
-    cursor: disabled
-      ? "default"
-      : "grab",
+    opacity:
+      isDragging ? 0.6 : 1,
+    cursor:
+      disabled
+        ? "default"
+        : "grab",
   };
 
   return (
@@ -106,6 +116,8 @@ export default function RankedPollScreen({
   options,
   voted,
   loading,
+  totalVoters,
+  results,
   setScreen,
   onVote,
 }: Props) {
@@ -115,6 +127,12 @@ export default function RankedPollScreen({
   ] = useState<PollOption[]>(
     options
   );
+
+  useEffect(() => {
+    setOrderedOptions(
+      options
+    );
+  }, [options]);
 
   const sensors =
     useSensors(
@@ -126,7 +144,6 @@ export default function RankedPollScreen({
           },
         }
       ),
-
       useSensor(
         TouchSensor,
         {
@@ -198,79 +215,128 @@ export default function RankedPollScreen({
         {title}
       </h1>
 
-      <p className="subtitle">
-        {voted
-          ? "Ваш голос принят!"
-          : "Расставьте варианты по порядку предпочтения:"}
-      </p>
+      {!voted ? (
+        <>
+          <p className="subtitle">
+            Расставьте варианты
+            по порядку предпочтения:
+          </p>
 
-      {!voted && (
-        <p className="subtitle">
-          🥇 Сверху — самый желательный вариант.
-          <br />
-          Последний — наименее желательный.
-        </p>
-      )}
+          <p className="subtitle">
+            🥇 Сверху — самый
+            желательный вариант.
+            <br />
+            Последний — наименее
+            желательный.
+          </p>
 
-      <DndContext
-        sensors={sensors}
-        collisionDetection={
-          closestCenter
-        }
-        onDragEnd={
-          handleDragEnd
-        }
-      >
-        <SortableContext
-          items={orderedOptions.map(
-            (option) =>
-              option.id
-          )}
-          strategy={
-            verticalListSortingStrategy
-          }
-        >
-          <div className="poll-options">
-            {orderedOptions.map(
+          <DndContext
+            sensors={sensors}
+            collisionDetection={
+              closestCenter
+            }
+            onDragEnd={
+              handleDragEnd
+            }
+          >
+            <SortableContext
+              items={orderedOptions.map(
+                (option) =>
+                  option.id
+              )}
+              strategy={
+                verticalListSortingStrategy
+              }
+            >
+              <div className="poll-options">
+                {orderedOptions.map(
+                  (
+                    option,
+                    index
+                  ) => (
+                    <SortableOption
+                      key={
+                        option.id
+                      }
+                      option={
+                        option
+                      }
+                      index={
+                        index
+                      }
+                      disabled={
+                        loading
+                      }
+                    />
+                  )
+                )}
+              </div>
+            </SortableContext>
+          </DndContext>
+
+          <button
+            className="primary"
+            onClick={() =>
+              onVote(
+                orderedOptions
+              )
+            }
+            disabled={loading}
+          >
+            {loading
+              ? "Отправляем..."
+              : "Проголосовать"}
+          </button>
+        </>
+      ) : (
+        <>
+          <p className="subtitle">
+            ✅ Ваш голос уже принят.
+          </p>
+
+          <h2>
+            Результаты
+          </h2>
+
+          <p className="subtitle">
+            Всего участников:{" "}
+            {totalVoters}
+          </p>
+
+          <div className="results">
+            {results.map(
               (
-                option,
+                result,
                 index
               ) => (
-                <SortableOption
+                <div
+                  className="result-row"
                   key={
-                    option.id
+                    result.option.id
                   }
-                  option={
-                    option
-                  }
-                  index={
-                    index
-                  }
-                  disabled={
-                    voted ||
-                    loading
-                  }
-                />
+                >
+                  <span>
+                    {index === 0
+                      ? "🏆 "
+                      : ""}
+                    {result.option.text}
+                  </span>
+
+                  <strong>
+                    {result.score} б.
+                  </strong>
+                </div>
               )
             )}
           </div>
-        </SortableContext>
-      </DndContext>
 
-      {!voted && (
-        <button
-          className="primary"
-          onClick={() =>
-            onVote(
-              orderedOptions
-            )
-          }
-          disabled={loading}
-        >
-          {loading
-            ? "Отправляем..."
-            : "Проголосовать"}
-        </button>
+          <p className="subtitle">
+            Баллы рассчитаны по
+            системе Borda: более
+            высокое место даёт
+            больше баллов.
+          </p>
+        </>
       )}
     </main>
   );
