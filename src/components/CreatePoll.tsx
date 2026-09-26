@@ -1,7 +1,9 @@
 import { useState } from "react";
+
 import type {
   Screen,
   VotingMethod,
+  ResultsVisibility,
 } from "../types/poll";
 
 type Props = {
@@ -10,7 +12,9 @@ type Props = {
   onCreate: (
     title: string,
     options: string[],
-    votingMethod: VotingMethod
+    votingMethod: VotingMethod,
+    resultsVisibility: ResultsVisibility,
+    endsAt: string | null
   ) => Promise<void>;
 };
 
@@ -19,22 +23,30 @@ export default function CreatePoll({
   setScreen,
   onCreate,
 }: Props) {
-  const [title, setTitle] = useState("");
+  const [title, setTitle] =
+    useState("");
 
-  const [options, setOptions] = useState([
-    "",
-    "",
-  ]);
-
-  const [votingMethod, setVotingMethod] =
-    useState<VotingMethod>("plurality");
-
-  const addOption = () => {
-    setOptions([
-      ...options,
+  const [options, setOptions] =
+    useState([
+      "",
       "",
     ]);
-  };
+
+  const [votingMethod, setVotingMethod] =
+    useState<VotingMethod>(
+      "plurality"
+    );
+
+  const [
+    resultsVisibility,
+    setResultsVisibility,
+  ] =
+    useState<ResultsVisibility>(
+      "always"
+    );
+
+  const [duration, setDuration] =
+    useState("none");
 
   const updateOption = (
     index: number,
@@ -44,36 +56,110 @@ export default function CreatePoll({
 
     copy[index] = value;
 
+    if (
+      value.trim() &&
+      index ===
+        options.length - 1
+    ) {
+      copy.push("");
+    }
+
     setOptions(copy);
   };
 
-  const submit = async () => {
-    if (!title.trim()) {
+  const addOption = () => {
+    if (options.length >= 20) {
       alert(
-        "Введите название голосования"
+        "Можно добавить максимум 20 вариантов."
       );
 
       return;
     }
 
-    const validOptions = options
-      .map((option) => option.trim())
-      .filter(Boolean);
-
-    if (validOptions.length < 2) {
-      alert(
-        "Добавьте хотя бы два варианта"
-      );
-
-      return;
-    }
-
-    await onCreate(
-      title,
-      validOptions,
-      votingMethod
-    );
+    setOptions([
+      ...options,
+      "",
+    ]);
   };
+
+  const removeEmptyLastOption = () => {
+    if (
+      options.length > 2 &&
+      !options[
+        options.length - 1
+      ].trim()
+    ) {
+      setOptions(
+        options.slice(
+          0,
+          -1
+        )
+      );
+    }
+  };
+
+  const getEndsAt =
+    (): string | null => {
+      if (
+        duration ===
+        "none"
+      ) {
+        return null;
+      }
+
+      const now =
+        new Date();
+
+      const hours =
+        Number(
+          duration
+        );
+
+      now.setHours(
+        now.getHours() +
+          hours
+      );
+
+      return now.toISOString();
+    };
+
+  const submit =
+    async () => {
+      if (!title.trim()) {
+        alert(
+          "Введите название голосования"
+        );
+
+        return;
+      }
+
+      const validOptions =
+        options
+          .map(
+            (option) =>
+              option.trim()
+          )
+          .filter(Boolean);
+
+      if (
+        validOptions.length <
+        2
+      ) {
+        alert(
+          "Добавьте хотя бы два варианта"
+        );
+
+        return;
+      }
+
+      await onCreate(
+        title,
+        validOptions,
+        votingMethod,
+        resultsVisibility,
+        getEndsAt()
+      );
+    };
 
   return (
     <main className="app">
@@ -97,7 +183,9 @@ export default function CreatePoll({
       <input
         value={title}
         onChange={(e) =>
-          setTitle(e.target.value)
+          setTitle(
+            e.target.value
+          )
         }
         placeholder="Например: Кто будет админом?"
       />
@@ -109,12 +197,15 @@ export default function CreatePoll({
       <button
         type="button"
         className={
-          votingMethod === "plurality"
+          votingMethod ===
+          "plurality"
             ? "primary"
             : "secondary"
         }
         onClick={() =>
-          setVotingMethod("plurality")
+          setVotingMethod(
+            "plurality"
+          )
         }
       >
         🗳️ Обычное
@@ -123,19 +214,23 @@ export default function CreatePoll({
       <button
         type="button"
         className={
-          votingMethod === "ranked"
+          votingMethod ===
+          "ranked"
             ? "primary"
             : "secondary"
         }
         onClick={() =>
-          setVotingMethod("ranked")
+          setVotingMethod(
+            "ranked"
+          )
         }
       >
         🏆 Ранжирование
       </button>
 
       <p className="subtitle">
-        {votingMethod === "plurality"
+        {votingMethod ===
+        "plurality"
           ? "Выберите один вариант."
           : "Расставьте все варианты от самого желательного к наименее желательному."}
       </p>
@@ -145,7 +240,10 @@ export default function CreatePoll({
       </label>
 
       {options.map(
-        (option, index) => (
+        (
+          option,
+          index
+        ) => (
           <input
             key={index}
             value={option}
@@ -162,12 +260,103 @@ export default function CreatePoll({
         )
       )}
 
+      {options.length <
+        20 && (
+        <button
+          className="secondary"
+          onClick={
+            addOption
+          }
+        >
+          + Добавить вариант
+        </button>
+      )}
+
+      {options.length >
+        2 &&
+        !options[
+          options.length - 1
+        ].trim() && (
+          <button
+            className="secondary"
+            onClick={
+              removeEmptyLastOption
+            }
+          >
+            − Убрать пустой вариант
+          </button>
+        )}
+
+      <label>
+        Результаты
+      </label>
+
       <button
-        className="secondary"
-        onClick={addOption}
+        type="button"
+        className={
+          resultsVisibility ===
+          "always"
+            ? "primary"
+            : "secondary"
+        }
+        onClick={() =>
+          setResultsVisibility(
+            "always"
+          )
+        }
       >
-        + Добавить вариант
+        👀 Показывать сразу
       </button>
+
+      <button
+        type="button"
+        className={
+          resultsVisibility ===
+          "after_vote"
+            ? "primary"
+            : "secondary"
+        }
+        onClick={() =>
+          setResultsVisibility(
+            "after_vote"
+          )
+        }
+      >
+        🔒 Показывать после голосования
+      </button>
+
+      <label>
+        Срок голосования
+      </label>
+
+      <select
+        value={duration}
+        onChange={(e) =>
+          setDuration(
+            e.target.value
+          )
+        }
+      >
+        <option value="none">
+          Без ограничения
+        </option>
+
+        <option value="1">
+          1 час
+        </option>
+
+        <option value="24">
+          1 день
+        </option>
+
+        <option value="72">
+          3 дня
+        </option>
+
+        <option value="168">
+          7 дней
+        </option>
+      </select>
 
       <button
         className="primary"
