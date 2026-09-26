@@ -50,11 +50,21 @@ export default function PollScreen({
   onVote,
   onShare,
 }: Props) {
+  const maxVotes = Math.max(
+    ...options.map(
+      (option) =>
+        voteCounts[option.id] || 0
+    ),
+    0
+  );
+
   return (
     <main className="app">
       <button
         className="back"
-        onClick={() => setScreen("home")}
+        onClick={() =>
+          setScreen("home")
+        }
       >
         ← На главную
       </button>
@@ -67,22 +77,22 @@ export default function PollScreen({
           : "Выберите один вариант:"}
       </p>
 
-      <div className="poll-options">
-        {options.map((option) => (
-          <button
-            key={option.id}
-            className="poll-option"
-            onClick={() =>
-              onVote(option.id)
-            }
-            disabled={
-              voted || loading
-            }
-          >
-            {option.text}
-          </button>
-        ))}
-      </div>
+      {!voted && (
+        <div className="poll-options">
+          {options.map((option) => (
+            <button
+              key={option.id}
+              className="poll-option"
+              onClick={() =>
+                onVote(option.id)
+              }
+              disabled={loading}
+            >
+              {option.text}
+            </button>
+          ))}
+        </div>
+      )}
 
       <button
         className="secondary"
@@ -91,10 +101,12 @@ export default function PollScreen({
         📤 Поделиться голосованием
       </button>
 
-      <h2>Результаты</h2>
+      <h2>📊 Результаты</h2>
 
       <p className="subtitle">
-        Всего голосов: {totalVotes}
+        Всего{" "}
+        {totalVotes}{" "}
+        {getVotesText(totalVotes)}
       </p>
 
       <div className="results">
@@ -102,19 +114,50 @@ export default function PollScreen({
           const count =
             voteCounts[option.id] || 0;
 
+          const percentage =
+            totalVotes > 0
+              ? Math.round(
+                  (count /
+                    totalVotes) *
+                    100
+                )
+              : 0;
+
+          const isWinner =
+            maxVotes > 0 &&
+            count === maxVotes;
+
           return (
             <div
-              className="result-row"
+              className="result-card"
               key={option.id}
             >
-              <span>
-                {option.text}
-              </span>
+              <div className="result-header">
+                <span>
+                  {isWinner
+                    ? "🏆 "
+                    : ""}
+                  {option.text}
+                </span>
 
-              <strong>
+                <strong>
+                  {percentage}%
+                </strong>
+              </div>
+
+              <div className="result-bar">
+                <div
+                  className="result-bar-fill"
+                  style={{
+                    width: `${percentage}%`,
+                  }}
+                />
+              </div>
+
+              <div className="result-count">
                 {count}{" "}
                 {getVotesText(count)}
-              </strong>
+              </div>
             </div>
           );
         })}
