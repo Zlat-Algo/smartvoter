@@ -1,64 +1,55 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import {
   DndContext,
   closestCenter,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-
-import type {
-  DragEndEvent,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 
 import {
   SortableContext,
-  useSortable,
   verticalListSortingStrategy,
+  useSortable,
   arrayMove,
 } from "@dnd-kit/sortable";
 
 import { CSS } from "@dnd-kit/utilities";
 
 import type {
+  Poll,
   PollOption,
   Screen,
 } from "../types/poll";
 
-type RankedResult = {
-  option: PollOption;
-  score: number;
-  firstPlaces: number;
-};
-
 type Props = {
-  title: string;
+  poll: Poll;
   options: PollOption[];
   voted: boolean;
   loading: boolean;
-  totalVoters: number;
-  results: RankedResult[];
-  showResults: boolean;
-  pollExpired: boolean;
+  now: number;
+  rankedScores: Record<
+    string,
+    number
+  >;
+  rankedParticipantCount: number;
   setScreen: (screen: Screen) => void;
   onVote: (
-    orderedOptions: PollOption[]
-  ) => void;
+    optionIds: string[]
+  ) => Promise<void>;
   onShare: () => void;
 };
 
 type SortableOptionProps = {
   option: PollOption;
   index: number;
-  disabled: boolean;
 };
 
 function SortableOption({
   option,
   index,
-  disabled,
 }: SortableOptionProps) {
   const {
     attributes,
@@ -66,63 +57,105 @@ function SortableOption({
     setNodeRef,
     transform,
     transition,
-    isDragging,
   } = useSortable({
     id: option.id,
   });
 
   const style = {
-    transform:
-      CSS.Transform.toString(
-        transform
-      ),
+    transform: CSS.Transform.toString(
+      transform
+    ),
     transition,
-    touchAction:
-      disabled
-        ? "auto"
-        : "none",
-    opacity:
-      isDragging ? 0.6 : 1,
-    cursor:
-      disabled
-        ? "default"
-        : "grab",
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    padding: "13px 14px",
+    borderRadius: 14,
+    background:
+      "rgba(128,128,128,0.10)",
+    touchAction: "none",
+    cursor: "grab",
   };
 
   return (
-    <button
-      type="button"
+    <div
       ref={setNodeRef}
-      className="poll-option"
       style={style}
-      disabled={disabled}
       {...attributes}
       {...listeners}
     >
-      <strong>
+      <strong
+        style={{
+          minWidth: 28,
+          opacity: 0.7,
+        }}
+      >
         {index + 1}.
       </strong>
 
       <span>
-        ☰
-      </span>
-
-      <span>
         {option.text}
       </span>
-    </button>
+    </div>
   );
 }
 
+function getTimeText(
+  endsAt: string | null | undefined
+) {
+  if (!endsAt) {
+    return "Без ограничения";
+  }
+
+  const difference =
+    new Date(
+      endsAt
+    ).getTime() - Date.now();
+
+  if (difference <= 0) {
+    return "Голосование завершено";
+  }
+
+  const minutes =
+    Math.floor(
+      difference / 60000
+    );
+
+  const days =
+    Math.floor(
+      minutes / 1440
+    );
+
+  const hours =
+    Math.floor(
+      (minutes % 1440) / 60
+    );
+
+  const mins =
+    minutes % 60;
+
+  if (days > 0) {
+    return `${days} д ${hours} ч`;
+  }
+
+  if (hours > 0) {
+    return `${hours} ч ${mins} мин`;
+  }
+
+  return `${Math.max(
+    1,
+    mins
+  )} мин`;
+}
+
 export default function RankedPollScreen({
-  title,
+  poll,
   options,
   voted,
   loading,
-  totalVoters,
-  results,
-  showResults,
-  pollExpired,
+  now,
+  rankedScores,
+  rankedParticipantCount,
   setScreen,
   onVote,
   onShare,
@@ -130,9 +163,7 @@ export default function RankedPollScreen({
   const [
     orderedOptions,
     setOrderedOptions,
-  ] = useState<PollOption[]>(
-    options
-  );
+  ] = useState(options);
 
   useEffect(() => {
     setOrderedOptions(
@@ -140,27 +171,24 @@ export default function RankedPollScreen({
     );
   }, [options]);
 
-  const sensors =
-    useSensors(
-      useSensor(
-        PointerSensor,
-        {
-          activationConstraint: {
-            distance: 8,
-          },
-        }
-      ),
+  const pollExpired =
+    !!poll.ends_at &&
+    new Date(
+      poll.ends_at
+    ).getTime() <= now;
 
-      useSensor(
-        TouchSensor,
-        {
-          activationConstraint: {
-            delay: 150,
-            tolerance: 5,
-          },
-        }
-      )
-    );
+  const showResults =
+    poll.results_visibility ===
+      "always" ||
+    (poll.results_visibility ===
+      "after_vote" &&
+      voted) ||
+    pollExpired;
+
+  const canEdit =
+    !pollExpired &&
+    (!voted ||
+      poll.allow_revoting);
 
   const handleDragEnd = (
     event: DragEndEvent
@@ -170,42 +198,64 @@ export default function RankedPollScreen({
       over,
     } = event;
 
-    if (
-      !over ||
-      active.id === over.id
-    ) {
+    if (!over) {
       return;
     }
 
-    const oldIndex =
-      orderedOptions.findIndex(
-        (option) =>
-          option.id ===
-          active.id
-      );
-
-    const newIndex =
-      orderedOptions.findIndex(
-        (option) =>
-          option.id ===
-          over.id
-      );
-
     if (
-      oldIndex === -1 ||
-      newIndex === -1
+      active.id ===
+      over.id
     ) {
       return;
     }
 
     setOrderedOptions(
-      arrayMove(
-        orderedOptions,
-        oldIndex,
-        newIndex
+      (items) => {
+        const oldIndex =
+          items.findIndex(
+            (item) =>
+              item.id ===
+              active.id
+          );
+
+        const newIndex =
+          items.findIndex(
+            (item) =>
+              item.id ===
+              over.id
+          );
+
+        return arrayMove(
+          items,
+          oldIndex,
+          newIndex
+        );
+      }
+    );
+  };
+
+  const submit = async () => {
+    await onVote(
+      orderedOptions.map(
+        (option) =>
+          option.id
       )
     );
   };
+
+  const sortedResults =
+    options
+      .map((option) => ({
+        ...option,
+        score:
+          rankedScores[
+            option.id
+          ] ?? 0,
+      }))
+      .sort(
+        (a, b) =>
+          b.score - a.score
+      );
 
   return (
     <main className="app">
@@ -215,38 +265,48 @@ export default function RankedPollScreen({
           setScreen("home")
         }
       >
-        ← На главную
+        ← Назад
       </button>
 
       <h1>
-        {title}
+        {poll.title}
       </h1>
 
-      {pollExpired ? (
-        <p className="subtitle">
-          ⏰ Голосование завершено.
-        </p>
-      ) : voted ? (
-        <p className="subtitle">
-          ✅ Ваш голос уже принят.
-        </p>
-      ) : (
-        <>
-          <p className="subtitle">
-            Расставьте варианты
-            по порядку предпочтения:
-          </p>
+      <div
+        style={{
+          marginTop: 8,
+          marginBottom: 18,
+          padding: "10px 12px",
+          borderRadius: 12,
+          background:
+            pollExpired
+              ? "rgba(255, 80, 80, 0.10)"
+              : "rgba(100, 150, 255, 0.10)",
+          fontSize: 14,
+        }}
+      >
+        {pollExpired
+          ? "🔴 Голосование завершено"
+          : `⏳ Осталось: ${getTimeText(
+              poll.ends_at
+            )}`}
+      </div>
 
-          <p className="subtitle">
-            🥇 Сверху — самый
-            желательный вариант.
-            <br />
-            Последний — наименее
-            желательный.
+      {canEdit && (
+        <>
+          <p
+            className="subtitle"
+            style={{
+              marginBottom: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            {voted
+              ? "Измени порядок вариантов и сохрани новый голос."
+              : "Перетащи варианты в порядке от самого желательного к наименее желательному."}
           </p>
 
           <DndContext
-            sensors={sensors}
             collisionDetection={
               closestCenter
             }
@@ -263,7 +323,15 @@ export default function RankedPollScreen({
                 verticalListSortingStrategy
               }
             >
-              <div className="poll-options">
+              <div
+                style={{
+                  display:
+                    "flex",
+                  flexDirection:
+                    "column",
+                  gap: 10,
+                }}
+              >
                 {orderedOptions.map(
                   (
                     option,
@@ -279,9 +347,6 @@ export default function RankedPollScreen({
                       index={
                         index
                       }
-                      disabled={
-                        loading
-                      }
                     />
                   )
                 )}
@@ -291,127 +356,123 @@ export default function RankedPollScreen({
 
           <button
             className="primary"
-            onClick={() =>
-              onVote(
-                orderedOptions
-              )
-            }
+            onClick={submit}
             disabled={loading}
+            style={{
+              marginTop: 16,
+            }}
           >
             {loading
-              ? "Отправляем..."
-              : "Проголосовать"}
+              ? "Сохраняем..."
+              : voted
+              ? "Изменить голос"
+              : "Сохранить порядок"}
           </button>
         </>
       )}
 
-      <button
-        className="secondary"
-        onClick={onShare}
-      >
-        📤 Поделиться голосованием
-      </button>
+      {voted &&
+        !poll.allow_revoting &&
+        !pollExpired && (
+          <p className="subtitle">
+            ✅ Ваш порядок принят.
+          </p>
+        )}
 
-      {showResults ? (
-        <>
+      {showResults && (
+        <section
+          style={{
+            marginTop: 26,
+          }}
+        >
           <h2>
-            📊 Результаты
+            Результаты
           </h2>
 
           <p className="subtitle">
-            Всего участников:{" "}
-            {totalVoters}
+            Участников:{" "}
+            {rankedParticipantCount}
           </p>
 
-          <div className="ranked-results">
-            {results.map(
+          <div
+            style={{
+              display:
+                "flex",
+              flexDirection:
+                "column",
+              gap: 10,
+            }}
+          >
+            {sortedResults.map(
               (
-                result,
+                option,
                 index
-              ) => {
-                const maxScore =
-                  results[0]?.score ||
-                  0;
+              ) => (
+                <div
+                  key={
+                    option.id
+                  }
+                  style={{
+                    display:
+                      "flex",
+                    alignItems:
+                      "center",
+                    gap: 10,
+                    padding:
+                      "12px 14px",
+                    borderRadius:
+                      14,
+                    background:
+                      "rgba(128,128,128,0.10)",
+                  }}
+                >
+                  <strong>
+                    {index + 1}.
+                  </strong>
 
-                const percentage =
-                  maxScore > 0
-                    ? Math.round(
-                        (result.score /
-                          maxScore) *
-                          100
-                      )
-                    : 0;
-
-                const medals = [
-                  "🥇",
-                  "🥈",
-                  "🥉",
-                ];
-
-                return (
-                  <div
-                    className={`ranked-result-card ${
-                      index < 3
-                        ? "top-result"
-                        : ""
-                    }`}
-                    key={
-                      result.option.id
-                    }
+                  <span
+                    style={{
+                      flex: 1,
+                    }}
                   >
-                    <div className="ranked-result-header">
-                      <span className="ranked-place">
-                        {medals[index] ||
-                          `${
-                            index +
-                            1
-                          }.`}
-                      </span>
+                    {
+                      option.text
+                    }
+                  </span>
 
-                      <span className="ranked-option-name">
-                        {
-                          result
-                            .option
-                            .text
-                        }
-                      </span>
-
-                      <strong className="ranked-score">
-                        {
-                          result.score
-                        }{" "}
-                        б.
-                      </strong>
-                    </div>
-
-                    <div className="ranked-result-bar">
-                      <div
-                        className="ranked-result-bar-fill"
-                        style={{
-                          width: `${percentage}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              }
+                  <strong>
+                    {option.score}
+                  </strong>
+                </div>
+              )
             )}
           </div>
-
-          <p className="subtitle">
-            Баллы рассчитаны по
-            системе Borda: более
-            высокое место даёт
-            больше баллов.
-          </p>
-        </>
-      ) : (
-        <p className="subtitle">
-          🔒 Результаты будут
-          доступны после
-          голосования.
-        </p>
+        </section>
       )}
+
+      {!showResults &&
+        !pollExpired && (
+          <p
+            className="subtitle"
+            style={{
+              marginTop: 22,
+            }}
+          >
+            Результаты станут
+            доступны после
+            голосования.
+          </p>
+        )}
+
+      <button
+        className="secondary"
+        onClick={onShare}
+        style={{
+          marginTop: 24,
+        }}
+      >
+        📤 Поделиться
+      </button>
     </main>
   );
 }
