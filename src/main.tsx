@@ -73,12 +73,13 @@ function App() {
       setCreatedPollId(poll.id);
       setOptions(validOptions);
       setScreen("poll");
-    } catch (error) {
-      console.error(error);
-      alert(
-        "Не удалось создать голосование. Возможно, ещё не настроены права доступа Supabase."
-      );
-    } finally {
+    } catch (error: any) {
+  console.error("SUPABASE ERROR:", error);
+
+  alert(
+    `Ошибка Supabase:\n\n${error?.message || JSON.stringify(error)}`
+  );
+}finally {
       setLoading(false);
     }
   };
