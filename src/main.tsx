@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
+import { supabase } from "./supabase";
 import "./style.css";
 
 type Screen = "home" | "create" | "poll";
@@ -9,6 +10,8 @@ function App() {
 
   const [title, setTitle] = useState("");
   const [options, setOptions] = useState(["", ""]);
+  const [createdPollId, setCreatedPollId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const addOption = () => {
     setOptions([...options, ""]);
@@ -20,21 +23,64 @@ function App() {
     setOptions(copy);
   };
 
-  const createPoll = () => {
+  const createPoll = async () => {
     if (!title.trim()) {
       alert("Введите название голосования");
       return;
     }
 
-    const validOptions = options.filter((x) => x.trim());
+    const validOptions = options
+      .map((option) => option.trim())
+      .filter(Boolean);
 
     if (validOptions.length < 2) {
       alert("Добавьте хотя бы два варианта");
       return;
     }
 
-    setOptions(validOptions);
-    setScreen("poll");
+    try {
+      setLoading(true);
+
+      // 1. Создаём голосование
+      const { data: poll, error: pollError } = await supabase
+        .from("polls")
+        .insert({
+          title: title.trim(),
+          voting_method: "plurality",
+        })
+        .select()
+        .single();
+
+      if (pollError) {
+        throw pollError;
+      }
+
+      // 2. Создаём варианты
+      const { error: optionsError } = await supabase
+        .from("poll_options")
+        .insert(
+          validOptions.map((text, index) => ({
+            poll_id: poll.id,
+            text,
+            position: index,
+          }))
+        );
+
+      if (optionsError) {
+        throw optionsError;
+      }
+
+      setCreatedPollId(poll.id);
+      setOptions(validOptions);
+      setScreen("poll");
+    } catch (error) {
+      console.error(error);
+      alert(
+        "Не удалось создать голосование. Возможно, ещё не настроены права доступа Supabase."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (screen === "create") {
@@ -69,8 +115,12 @@ function App() {
           + Добавить вариант
         </button>
 
-        <button className="primary" onClick={createPoll}>
-          Создать голосование
+        <button
+          className="primary"
+          onClick={createPoll}
+          disabled={loading}
+        >
+          {loading ? "Создаём..." : "Создать голосование"}
         </button>
       </main>
     );
@@ -79,8 +129,8 @@ function App() {
   if (screen === "poll") {
     return (
       <main className="app">
-        <button className="back" onClick={() => setScreen("create")}>
-          ← Назад
+        <button className="back" onClick={() => setScreen("home")}>
+          ← На главную
         </button>
 
         <h1>{title}</h1>
@@ -100,6 +150,12 @@ function App() {
             </button>
           ))}
         </div>
+
+        {createdPollId && (
+          <p className="poll-id">
+            ID голосования: {createdPollId}
+          </p>
+        )}
       </main>
     );
   }
@@ -111,7 +167,8 @@ function App() {
       <h1>SmartVoter</h1>
 
       <p className="subtitle">
-        Создавай голосования с продвинутыми способами подсчёта голосов.
+        Создавай голосования с продвинутыми способами
+        подсчёта голосов.
       </p>
 
       <button
