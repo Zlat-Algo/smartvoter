@@ -269,3 +269,11 @@ input:focus {
 .app h2 {
   text-align: center;
 }
+
+.poll-card span {
+  margin-top: 4px;
+}
+
+.poll-card span + span {
+  margin-top: 3px;
+}
