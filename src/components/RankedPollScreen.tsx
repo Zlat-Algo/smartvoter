@@ -71,9 +71,7 @@ function SortableOption({
 
   const style = {
     transform:
-      CSS.Transform.toString(
-        transform
-      ),
+      CSS.Transform.toString(transform),
     transition,
     touchAction:
       disabled
@@ -131,9 +129,7 @@ export default function RankedPollScreen({
   );
 
   useEffect(() => {
-    setOrderedOptions(
-      options
-    );
+    setOrderedOptions(options);
   }, [options]);
 
   const sensors =
@@ -176,15 +172,13 @@ export default function RankedPollScreen({
     const oldIndex =
       orderedOptions.findIndex(
         (option) =>
-          option.id ===
-          active.id
+          option.id === active.id
       );
 
     const newIndex =
       orderedOptions.findIndex(
         (option) =>
-          option.id ===
-          over.id
+          option.id === over.id
       );
 
     if (
