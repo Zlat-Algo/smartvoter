@@ -87,8 +87,8 @@ export async function getPoll(
   } = await supabase
     .from("polls")
     .select(
-      "id, title, voting_method, creator_telegram_id, created_at"
-    )
+  "id, title, voting_method, creator_telegram_id, created_at, results_visibility, ends_at"
+)
     .eq("id", pollId)
     .single();
 
