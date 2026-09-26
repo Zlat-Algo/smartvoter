@@ -8,34 +8,55 @@ import type {
 
 type Props = {
   loading: boolean;
-  setScreen: (screen: Screen) => void;
+  setScreen: (
+    screen: Screen
+  ) => void;
   onCreate: (
     title: string,
     options: string[],
     votingMethod: VotingMethod,
     resultsVisibility: ResultsVisibility,
-    endsAt: string | null
+    endsAt: string | null,
+    allowRevoting: boolean
   ) => Promise<void>;
 };
+
+const titleExamples = [
+  "Куда пойдём после школы?",
+  "Как назовём команду?",
+  "Кто станет админом?",
+  "Что посмотрим вечером?",
+  "Какой вариант выбрать?",
+  "Где проведём встречу?",
+  "Что будем делать на выходных?",
+  "Какую игру запустим?",
+  "Какой фильм посмотрим?",
+  "Как лучше поступить?",
+];
 
 export default function CreatePoll({
   loading,
   setScreen,
   onCreate,
 }: Props) {
-  const [title, setTitle] =
-    useState("");
+  const [
+    title,
+    setTitle,
+  ] = useState("");
 
-  const [options, setOptions] =
-    useState([
-      "",
-      "",
-    ]);
+  const [
+    options,
+    setOptions,
+  ] = useState([
+    "",
+  ]);
 
-  const [votingMethod, setVotingMethod] =
-    useState<VotingMethod>(
-      "plurality"
-    );
+  const [
+    votingMethod,
+    setVotingMethod,
+  ] = useState<VotingMethod>(
+    "plurality"
+  );
 
   const [
     resultsVisibility,
@@ -45,58 +66,62 @@ export default function CreatePoll({
       "always"
     );
 
-  const [duration, setDuration] =
-    useState("none");
+  const [
+    duration,
+    setDuration,
+  ] = useState("none");
+
+  const [
+    allowRevoting,
+    setAllowRevoting,
+  ] = useState(true);
+
+  const [
+    example,
+  ] = useState(
+    () =>
+      titleExamples[
+        Math.floor(
+          Math.random() *
+            titleExamples.length
+        )
+      ]
+  );
 
   const updateOption = (
     index: number,
     value: string
   ) => {
-    const copy = [...options];
+    let copy = [...options];
 
     copy[index] = value;
 
+    while (
+      copy.length > 1 &&
+      !copy[
+        copy.length - 1
+      ].trim() &&
+      !copy[
+        copy.length - 2
+      ].trim()
+    ) {
+      copy.pop();
+    }
+
     if (
-      value.trim() &&
-      index ===
-        options.length - 1 &&
-      options.length < 20
+      copy[
+        copy.length - 1
+      ]?.trim() &&
+      copy.length < 20
     ) {
       copy.push("");
     }
 
+    if (copy.length === 0) {
+      copy = [""];
+    }
+
     setOptions(copy);
-  };
-
-  const addOption = () => {
-    if (options.length >= 20) {
-      alert(
-        "Можно добавить максимум 20 вариантов."
-      );
-
-      return;
-    }
-
-    setOptions([
-      ...options,
-      "",
-    ]);
-  };
-
-  const removeEmptyLastOption = () => {
-    if (
-      options.length > 2 &&
-      !options[
-        options.length - 1
-      ].trim()
-    ) {
-      setOptions(
-        options.slice(
-          0,
-          -1
-        )
-      );
-    }
   };
 
   const getEndsAt =
@@ -111,14 +136,9 @@ export default function CreatePoll({
       const now =
         new Date();
 
-      const hours =
-        Number(
-          duration
-        );
-
       now.setHours(
         now.getHours() +
-          hours
+          Number(duration)
       );
 
       return now.toISOString();
@@ -144,10 +164,10 @@ export default function CreatePoll({
 
       if (
         validOptions.length <
-        2
+        1
       ) {
         alert(
-          "Добавьте хотя бы два варианта"
+          "Добавьте хотя бы один вариант"
         );
 
         return;
@@ -158,7 +178,8 @@ export default function CreatePoll({
         validOptions,
         votingMethod,
         resultsVisibility,
-        getEndsAt()
+        getEndsAt(),
+        allowRevoting
       );
     };
 
@@ -188,7 +209,7 @@ export default function CreatePoll({
             e.target.value
           )
         }
-        placeholder="Например: Кто будет админом?"
+        placeholder={`Например: ${example}`}
       />
 
       <label>
@@ -229,12 +250,12 @@ export default function CreatePoll({
         🏆 Ранжирование
       </button>
 
-      <p className="subtitle">
+      <div className="mode-description">
         {votingMethod ===
         "plurality"
           ? "Выберите один вариант."
           : "Расставьте все варианты от самого желательного к наименее желательному."}
-      </p>
+      </div>
 
       <label>
         Варианты
@@ -260,33 +281,6 @@ export default function CreatePoll({
           />
         )
       )}
-
-      {options.length <
-        20 && (
-        <button
-          className="secondary"
-          onClick={
-            addOption
-          }
-        >
-          + Добавить вариант
-        </button>
-      )}
-
-      {options.length >
-        2 &&
-        !options[
-          options.length - 1
-        ].trim() && (
-          <button
-            className="secondary"
-            onClick={
-              removeEmptyLastOption
-            }
-          >
-            − Убрать пустой вариант
-          </button>
-        )}
 
       <label>
         Результаты
@@ -323,41 +317,96 @@ export default function CreatePoll({
           )
         }
       >
-        🔒 Показывать после голосования
+        🔒 После голосования
+      </button>
+
+      <button
+        type="button"
+        className={
+          resultsVisibility ===
+          "after_expiration"
+            ? "primary"
+            : "secondary"
+        }
+        onClick={() =>
+          setResultsVisibility(
+            "after_expiration"
+          )
+        }
+      >
+        ⏰ После окончания
+      </button>
+
+      <label>
+        Переголосование
+      </label>
+
+      <button
+        type="button"
+        className={
+          allowRevoting
+            ? "primary"
+            : "secondary"
+        }
+        onClick={() =>
+          setAllowRevoting(
+            true
+          )
+        }
+      >
+        🔄 Разрешить переголосование
+      </button>
+
+      <button
+        type="button"
+        className={
+          !allowRevoting
+            ? "primary"
+            : "secondary"
+        }
+        onClick={() =>
+          setAllowRevoting(
+            false
+          )
+        }
+      >
+        🔒 Запретить переголосование
       </button>
 
       <label>
         Срок голосования
       </label>
 
-      <select
-        value={duration}
-        onChange={(e) =>
-          setDuration(
-            e.target.value
-          )
-        }
-      >
-        <option value="none">
-          Без ограничения
-        </option>
+      <div className="duration-picker">
+        <select
+          value={duration}
+          onChange={(e) =>
+            setDuration(
+              e.target.value
+            )
+          }
+        >
+          <option value="none">
+            ♾️ Без ограничения
+          </option>
 
-        <option value="1">
-          1 час
-        </option>
+          <option value="1">
+            ⏱️ 1 час
+          </option>
 
-        <option value="24">
-          1 день
-        </option>
+          <option value="24">
+            📅 1 день
+          </option>
 
-        <option value="72">
-          3 дня
-        </option>
+          <option value="72">
+            📅 3 дня
+          </option>
 
-        <option value="168">
-          7 дней
-        </option>
-      </select>
+          <option value="168">
+            📅 7 дней
+          </option>
+        </select>
+      </div>
 
       <button
         className="primary"
