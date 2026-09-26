@@ -20,4 +20,5 @@ export type Poll = {
   voting_method: string;
   creator_telegram_id: number | null;
   created_at: string;
+  participant_count?: number;
 };
