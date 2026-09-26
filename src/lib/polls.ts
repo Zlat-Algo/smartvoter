@@ -4,6 +4,7 @@ import type {
   Poll,
   PollOption,
   VotingMethod,
+  ResultsVisibility,
 } from "../types/poll";
 
 export async function createPoll(
@@ -11,7 +12,7 @@ export async function createPoll(
   options: string[],
   telegramUserId: number,
   votingMethod: VotingMethod,
-  resultsVisibility: "always" | "after_vote",
+  resultsVisibility: ResultsVisibility,
   endsAt: string | null
 ): Promise<{
   poll: Poll;
@@ -24,8 +25,7 @@ export async function createPoll(
         title: title.trim(),
         voting_method: votingMethod,
         creator_telegram_id: telegramUserId,
-        results_visibility:
-          resultsVisibility,
+        results_visibility: resultsVisibility,
         ends_at: endsAt,
       })
       .select()
@@ -41,13 +41,11 @@ export async function createPoll(
   } = await supabase
     .from("poll_options")
     .insert(
-      options.map(
-        (text, index) => ({
-          poll_id: poll.id,
-          text: text.trim(),
-          position: index,
-        })
-      )
+      options.map((text, index) => ({
+        poll_id: poll.id,
+        text: text.trim(),
+        position: index,
+      }))
     )
     .select();
 
@@ -56,22 +54,16 @@ export async function createPoll(
   }
 
   if (!createdOptions) {
-    throw new Error(
-      "Варианты не создались"
-    );
+    throw new Error("Варианты не создались");
   }
 
-  const sortedOptions =
-    [...createdOptions].sort(
-      (a, b) =>
-        a.position -
-        b.position
-    );
+  const sortedOptions = [...createdOptions].sort(
+    (a, b) => a.position - b.position
+  );
 
   return {
     poll,
-    options:
-      sortedOptions,
+    options: sortedOptions,
   };
 }
 
@@ -87,8 +79,16 @@ export async function getPoll(
   } = await supabase
     .from("polls")
     .select(
-  "id, title, voting_method, creator_telegram_id, created_at, results_visibility, ends_at"
-)
+      `
+      id,
+      title,
+      voting_method,
+      creator_telegram_id,
+      created_at,
+      results_visibility,
+      ends_at
+      `
+    )
     .eq("id", pollId)
     .single();
 
@@ -101,9 +101,7 @@ export async function getPoll(
     error: optionsError,
   } = await supabase
     .from("poll_options")
-    .select(
-      "id, text, position"
-    )
+    .select("id, text, position")
     .eq("poll_id", pollId)
     .order("position");
 
@@ -126,12 +124,17 @@ export async function getMyPolls(
   } = await supabase
     .from("polls")
     .select(
-      "id, title, voting_method, creator_telegram_id, created_at"
+      `
+      id,
+      title,
+      voting_method,
+      creator_telegram_id,
+      created_at,
+      results_visibility,
+      ends_at
+      `
     )
-    .eq(
-      "creator_telegram_id",
-      telegramUserId
-    )
+    .eq("creator_telegram_id", telegramUserId)
     .order("created_at", {
       ascending: false,
     });
@@ -142,81 +145,57 @@ export async function getMyPolls(
 
   const polls = data || [];
 
-  const pollsWithCounts =
-    await Promise.all(
-      polls.map(async (poll) => {
-        if (
-          poll.voting_method ===
-          "ranked"
-        ) {
-          const {
-            data: rankedVotes,
-            error: rankedError,
-          } = await supabase
-            .from("ranked_votes")
-            .select(
-              "telegram_user_id"
-            )
-            .eq(
-              "poll_id",
-              poll.id
-            );
-
-          if (rankedError) {
-            throw rankedError;
-          }
-
-          const uniqueUsers =
-            new Set(
-              (rankedVotes || []).map(
-                (vote) =>
-                  Number(
-                    vote.telegram_user_id
-                  )
-              )
-            );
-
-          return {
-            ...poll,
-            participant_count:
-              uniqueUsers.size,
-          };
-        }
-
+  const pollsWithCounts = await Promise.all(
+    polls.map(async (poll) => {
+      if (poll.voting_method === "ranked") {
         const {
-          data: votes,
-          error: votesError,
+          data: rankedVotes,
+          error: rankedError,
         } = await supabase
-          .from("votes")
-          .select(
-            "telegram_user_id"
-          )
-          .eq(
-            "poll_id",
-            poll.id
-          );
+          .from("ranked_votes")
+          .select("telegram_user_id")
+          .eq("poll_id", poll.id);
 
-        if (votesError) {
-          throw votesError;
+        if (rankedError) {
+          throw rankedError;
         }
 
-        const uniqueUsers =
-          new Set(
-            (votes || []).map(
-              (vote) =>
-                Number(
-                  vote.telegram_user_id
-                )
-            )
-          );
+        const uniqueUsers = new Set(
+          (rankedVotes || []).map((vote) =>
+            Number(vote.telegram_user_id)
+          )
+        );
 
         return {
           ...poll,
-          participant_count:
-            uniqueUsers.size,
+          participant_count: uniqueUsers.size,
         };
-      })
-    );
+      }
+
+      const {
+        data: votes,
+        error: votesError,
+      } = await supabase
+        .from("votes")
+        .select("telegram_user_id")
+        .eq("poll_id", poll.id);
+
+      if (votesError) {
+        throw votesError;
+      }
+
+      const uniqueUsers = new Set(
+        (votes || []).map((vote) =>
+          Number(vote.telegram_user_id)
+        )
+      );
+
+      return {
+        ...poll,
+        participant_count: uniqueUsers.size,
+      };
+    })
+  );
 
   return pollsWithCounts;
 }
@@ -236,10 +215,7 @@ export async function getResults(
     throw error;
   }
 
-  const counts: Record<
-    string,
-    number
-  > = {};
+  const counts: Record<string, number> = {};
 
   for (const vote of data || []) {
     counts[vote.option_id] =
@@ -260,19 +236,14 @@ export async function hasVoted(
     .from("votes")
     .select("id")
     .eq("poll_id", pollId)
-    .eq(
-      "telegram_user_id",
-      telegramUserId
-    )
+    .eq("telegram_user_id", telegramUserId)
     .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return (
-    (data || []).length > 0
-  );
+  return (data || []).length > 0;
 }
 
 export async function vote(
@@ -286,8 +257,7 @@ export async function vote(
       .insert({
         poll_id: pollId,
         option_id: optionId,
-        telegram_user_id:
-          telegramUserId,
+        telegram_user_id: telegramUserId,
       });
 
   if (error) {
@@ -306,19 +276,14 @@ export async function hasRankedVoted(
     .from("ranked_votes")
     .select("id")
     .eq("poll_id", pollId)
-    .eq(
-      "telegram_user_id",
-      telegramUserId
-    )
+    .eq("telegram_user_id", telegramUserId)
     .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return (
-    (data || []).length > 0
-  );
+  return (data || []).length > 0;
 }
 
 export async function rankedVote(
@@ -326,16 +291,14 @@ export async function rankedVote(
   orderedOptions: PollOption[],
   telegramUserId: number
 ) {
-  const rows =
-    orderedOptions.map(
-      (option, index) => ({
-        poll_id: pollId,
-        telegram_user_id:
-          telegramUserId,
-        option_id: option.id,
-        rank: index + 1,
-      })
-    );
+  const rows = orderedOptions.map(
+    (option, index) => ({
+      poll_id: pollId,
+      telegram_user_id: telegramUserId,
+      option_id: option.id,
+      rank: index + 1,
+    })
+  );
 
   const { error } =
     await supabase
@@ -365,76 +328,52 @@ export async function getRankedResults(
     throw error;
   }
 
-  const voterIds =
-    new Set<number>();
+  const voterIds = new Set<number>();
 
-  const scores: Record<
-    string,
-    number
-  > = {};
-
-  const firstPlaces: Record<
-    string,
-    number
-  > = {};
+  const scores: Record<string, number> = {};
+  const firstPlaces: Record<string, number> = {};
 
   for (const option of options) {
     scores[option.id] = 0;
     firstPlaces[option.id] = 0;
   }
 
-  const optionCount =
-    options.length;
+  const optionCount = options.length;
 
   for (const vote of data || []) {
     voterIds.add(
-      Number(
-        vote.telegram_user_id
-      )
+      Number(vote.telegram_user_id)
     );
 
-    const points =
-      Math.max(
-        optionCount -
-          vote.rank,
-        0
-      );
+    const points = Math.max(
+      optionCount - vote.rank,
+      0
+    );
 
     scores[vote.option_id] =
-      (scores[vote.option_id] || 0) +
-      points;
+      (scores[vote.option_id] || 0) + points;
 
     if (vote.rank === 1) {
-      firstPlaces[
-        vote.option_id
-      ] =
-        (firstPlaces[
-          vote.option_id
-        ] || 0) + 1;
+      firstPlaces[vote.option_id] =
+        (firstPlaces[vote.option_id] || 0) + 1;
     }
   }
 
-  const results =
-    options
-      .map((option) => ({
-        option,
-        score:
-          scores[option.id] || 0,
-        firstPlaces:
-          firstPlaces[
-            option.id
-          ] || 0,
-      }))
-      .sort(
-        (a, b) =>
-          b.score - a.score ||
-          b.firstPlaces -
-            a.firstPlaces
-      );
+  const results = options
+    .map((option) => ({
+      option,
+      score: scores[option.id] || 0,
+      firstPlaces:
+        firstPlaces[option.id] || 0,
+    }))
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.firstPlaces - a.firstPlaces
+    );
 
   return {
-    totalVoters:
-      voterIds.size,
+    totalVoters: voterIds.size,
     results,
   };
 }
