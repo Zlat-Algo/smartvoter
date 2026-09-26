@@ -10,7 +10,8 @@ export type VotingMethod =
 
 export type ResultsVisibility =
   | "always"
-  | "after_vote";
+  | "after_vote"
+  | "after_expiration";
 
 export type PollOption = {
   id: string;
@@ -26,5 +27,6 @@ export type Poll = {
   created_at: string;
   results_visibility?: ResultsVisibility;
   ends_at?: string | null;
+  allow_revoting?: boolean;
   participant_count?: number;
 };
