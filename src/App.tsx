@@ -492,21 +492,24 @@ export default function App() {
   ) {
     return (
       <RankedPollScreen
-        title={title}
-        options={pollOptions}
-        voted={voted}
-        loading={loading}
-        totalVoters={
-          totalRankedVoters
-        }
-        results={
-          rankedResults
-        }
-        setScreen={setScreen}
-        onVote={
-          handleRankedVote
-        }
-      />
+  title={title}
+  options={pollOptions}
+  voted={voted}
+  loading={loading}
+  totalVoters={
+    totalRankedVoters
+  }
+  results={
+    rankedResults
+  }
+  setScreen={setScreen}
+  onVote={
+    handleRankedVote
+  }
+  onShare={
+    handleShare
+  }
+/>
     );
   }
 
