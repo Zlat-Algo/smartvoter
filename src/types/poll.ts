@@ -1,4 +1,12 @@
-export type Screen = "home" | "create" | "poll" | "myPolls";
+export type Screen =
+  | "home"
+  | "create"
+  | "poll"
+  | "myPolls";
+
+export type VotingMethod =
+  | "plurality"
+  | "ranked";
 
 export type PollOption = {
   id: string;
