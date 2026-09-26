@@ -307,32 +307,69 @@ export default function RankedPollScreen({
             {totalVoters}
           </p>
 
-          <div className="results">
-            {results.map(
-              (
-                result,
-                index
-              ) => (
-                <div
-                  className="result-row"
-                  key={
-                    result.option.id
-                  }
-                >
-                  <span>
-                    {index === 0
-                      ? "🏆 "
-                      : ""}
-                    {result.option.text}
-                  </span>
+          <div className="ranked-results">
+  {results.map(
+    (
+      result,
+      index
+    ) => {
+      const maxScore =
+        results[0]?.score || 0;
 
-                  <strong>
-                    {result.score} б.
-                  </strong>
-                </div>
-              )
-            )}
+      const percentage =
+        maxScore > 0
+          ? Math.round(
+              (result.score /
+                maxScore) *
+                100
+            )
+          : 0;
+
+      const medals = [
+        "🥇",
+        "🥈",
+        "🥉",
+      ];
+
+      return (
+        <div
+          className={`ranked-result-card ${
+            index < 3
+              ? "top-result"
+              : ""
+          }`}
+          key={
+            result.option.id
+          }
+        >
+          <div className="ranked-result-header">
+            <span className="ranked-place">
+              {medals[index] ||
+                `${index + 1}.`}
+            </span>
+
+            <span className="ranked-option-name">
+              {result.option.text}
+            </span>
+
+            <strong className="ranked-score">
+              {result.score} б.
+            </strong>
           </div>
+
+          <div className="ranked-result-bar">
+            <div
+              className="ranked-result-bar-fill"
+              style={{
+                width: `${percentage}%`,
+              }}
+            />
+          </div>
+        </div>
+      );
+    }
+  )}
+</div>
 
           <p className="subtitle">
             Баллы рассчитаны по
