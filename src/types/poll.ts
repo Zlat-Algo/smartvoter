@@ -8,6 +8,10 @@ export type VotingMethod =
   | "plurality"
   | "ranked";
 
+export type ResultsVisibility =
+  | "always"
+  | "after_vote";
+
 export type PollOption = {
   id: string;
   text: string;
@@ -20,5 +24,7 @@ export type Poll = {
   voting_method: string;
   creator_telegram_id: number | null;
   created_at: string;
+  results_visibility?: ResultsVisibility;
+  ends_at?: string | null;
   participant_count?: number;
 };
