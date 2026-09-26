@@ -1,14 +1,105 @@
-import { useState } from "react";
-import type { PollOption } from "../types/poll";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+
+import type {
+  DragEndEvent,
+} from "@dnd-kit/core";
+
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+
+import { CSS } from "@dnd-kit/utilities";
+
+import type {
+  PollOption,
+  Screen,
+} from "../types/poll";
 
 type Props = {
   title: string;
   options: PollOption[];
   voted: boolean;
   loading: boolean;
-  setScreen: (screen: "home" | "create" | "poll" | "myPolls") => void;
-  onVote: (orderedOptions: PollOption[]) => void;
+  setScreen: (screen: Screen) => void;
+  onVote: (
+    orderedOptions: PollOption[]
+  ) => void;
 };
+
+type SortableOptionProps = {
+  option: PollOption;
+  index: number;
+  disabled: boolean;
+};
+
+function SortableOption({
+  option,
+  index,
+  disabled,
+}: SortableOptionProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: option.id,
+  });
+
+  const style = {
+    transform:
+      CSS.Transform.toString(
+        transform
+      ),
+    transition,
+    touchAction:
+      disabled
+        ? "auto"
+        : "none",
+    opacity: isDragging
+      ? 0.6
+      : 1,
+    cursor: disabled
+      ? "default"
+      : "grab",
+  };
+
+  return (
+    <button
+      type="button"
+      ref={setNodeRef}
+      className="poll-option"
+      style={style}
+      disabled={disabled}
+      {...attributes}
+      {...listeners}
+    >
+      <strong>
+        {index + 1}.
+      </strong>
+
+      <span>
+        ☰
+      </span>
+
+      <span>
+        {option.text}
+      </span>
+    </button>
+  );
+}
 
 export default function RankedPollScreen({
   title,
@@ -18,83 +109,133 @@ export default function RankedPollScreen({
   setScreen,
   onVote,
 }: Props) {
-  const [orderedOptions, setOrderedOptions] =
-    useState<PollOption[]>(options);
+  const sensors =
+    useSensors(
+      useSensor(
+        PointerSensor,
+        {
+          activationConstraint: {
+            distance: 8,
+          },
+        }
+      ),
 
-  const [draggedIndex, setDraggedIndex] =
-    useState<number | null>(null);
+      useSensor(
+        TouchSensor,
+        {
+          activationConstraint: {
+            delay: 150,
+            tolerance: 5,
+          },
+        }
+      )
+    );
 
-  const moveOption = (
-    fromIndex: number,
-    toIndex: number
+  const handleDragEnd = (
+    event: DragEndEvent
   ) => {
-    if (fromIndex === toIndex) {
-      return;
-    }
-
-    const copy = [...orderedOptions];
-
-    const [moved] = copy.splice(fromIndex, 1);
-
-    copy.splice(toIndex, 0, moved);
-
-    setOrderedOptions(copy);
-  };
-
-  const handleDragStart = (
-    index: number
-  ) => {
-    setDraggedIndex(index);
-  };
-
-  const handleDragOver = (
-    event: React.DragEvent,
-    index: number
-  ) => {
-    event.preventDefault();
+    const {
+      active,
+      over,
+    } = event;
 
     if (
-      draggedIndex === null ||
-      draggedIndex === index
+      !over ||
+      active.id === over.id
     ) {
       return;
     }
 
-    moveOption(draggedIndex, index);
+    const oldIndex =
+      options.findIndex(
+        (option) =>
+          option.id === active.id
+      );
 
-    setDraggedIndex(index);
-  };
+    const newIndex =
+      options.findIndex(
+        (option) =>
+          option.id === over.id
+      );
 
-  const handleDragEnd = () => {
-    setDraggedIndex(null);
-  };
-
-  const moveUp = (index: number) => {
-    if (index === 0) {
+    if (
+      oldIndex === -1 ||
+      newIndex === -1
+    ) {
       return;
     }
 
-    moveOption(index, index - 1);
+    const newOrder =
+      arrayMove(
+        options,
+        oldIndex,
+        newIndex
+      );
+
+    onReorder(newOrder);
   };
 
-  const moveDown = (index: number) => {
-    if (index === orderedOptions.length - 1) {
-      return;
-    }
-
-    moveOption(index, index + 1);
+  const onReorder = (
+    newOrder: PollOption[]
+  ) => {
+    setOrderedOptions(newOrder);
   };
 
+  return (
+    <RankedContent
+      title={title}
+      options={options}
+      voted={voted}
+      loading={loading}
+      setScreen={setScreen}
+      onVote={onVote}
+      sensors={sensors}
+      handleDragEnd={
+        handleDragEnd
+      }
+    />
+  );
+}
+
+function RankedContent({
+  title,
+  options,
+  voted,
+  loading,
+  setScreen,
+  onVote,
+  sensors,
+  handleDragEnd,
+}: {
+  title: string;
+  options: PollOption[];
+  voted: boolean;
+  loading: boolean;
+  setScreen: (screen: Screen) => void;
+  onVote: (
+    orderedOptions: PollOption[]
+  ) => void;
+  sensors: ReturnType<
+    typeof useSensors
+  >;
+  handleDragEnd: (
+    event: DragEndEvent
+  ) => void;
+}) {
   return (
     <main className="app">
       <button
         className="back"
-        onClick={() => setScreen("home")}
+        onClick={() =>
+          setScreen("home")
+        }
       >
         ← На главную
       </button>
 
-      <h1>{title}</h1>
+      <h1>
+        {title}
+      </h1>
 
       <p className="subtitle">
         {voted
@@ -110,67 +251,56 @@ export default function RankedPollScreen({
         </p>
       )}
 
-      <div className="ranked-options">
-        {orderedOptions.map((option, index) => (
-          <div
-            key={option.id}
-            className={`ranked-card ${
-              draggedIndex === index
-                ? "dragging"
-                : ""
-            }`}
-            draggable={!voted}
-            onDragStart={() =>
-              handleDragStart(index)
-            }
-            onDragOver={(event) =>
-              handleDragOver(event, index)
-            }
-            onDragEnd={handleDragEnd}
-          >
-            <div className="rank-number">
-              {index + 1}
-            </div>
-
-            <div className="drag-handle">
-              ☰
-            </div>
-
-            <div className="ranked-text">
-              {option.text}
-            </div>
-
-            {!voted && (
-              <div className="rank-buttons">
-                <button
-                  type="button"
-                  onClick={() => moveUp(index)}
-                  disabled={index === 0}
-                >
-                  ↑
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => moveDown(index)}
-                  disabled={
-                    index ===
-                    orderedOptions.length - 1
+      <DndContext
+        sensors={sensors}
+        collisionDetection={
+          closestCenter
+        }
+        onDragEnd={
+          handleDragEnd
+        }
+      >
+        <SortableContext
+          items={options.map(
+            (option) =>
+              option.id
+          )}
+          strategy={
+            verticalListSortingStrategy
+          }
+        >
+          <div className="poll-options">
+            {options.map(
+              (
+                option,
+                index
+              ) => (
+                <SortableOption
+                  key={
+                    option.id
                   }
-                >
-                  ↓
-                </button>
-              </div>
+                  option={
+                    option
+                  }
+                  index={
+                    index
+                  }
+                  disabled={
+                    voted ||
+                    loading
+                  }
+                />
+              )
             )}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {!voted && (
         <button
           className="primary"
           onClick={() =>
-            onVote(orderedOptions)
+            onVote(options)
           }
           disabled={loading}
         >
