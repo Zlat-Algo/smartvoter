@@ -13,7 +13,6 @@ import {
   SortableContext,
   verticalListSortingStrategy,
   useSortable,
-  arrayMove,
 } from "@dnd-kit/sortable";
 
 import { CSS } from "@dnd-kit/utilities";
@@ -30,10 +29,7 @@ type Props = {
   voted: boolean;
   loading: boolean;
   now: number;
-  rankedScores: Record<
-    string,
-    number
-  >;
+  rankedScores: Record<string, number>;
   rankedParticipantCount: number;
   setScreen: (screen: Screen) => void;
   onVote: (
@@ -101,51 +97,127 @@ function SortableOption({
 }
 
 function getTimeText(
-  endsAt: string | null | undefined
+  endsAt: string | null | undefined,
+  now: number
 ) {
   if (!endsAt) {
-    return "Без ограничения";
+    return null;
   }
 
   const difference =
-    new Date(
-      endsAt
-    ).getTime() - Date.now();
+    new Date(endsAt).getTime() -
+    now;
 
   if (difference <= 0) {
     return "Голосование завершено";
   }
 
-  const minutes =
-    Math.floor(
-      difference / 60000
-    );
+  const minutes = Math.floor(
+    difference / 60000
+  );
 
-  const days =
-    Math.floor(
-      minutes / 1440
-    );
+  const days = Math.floor(
+    minutes / 1440
+  );
 
-  const hours =
-    Math.floor(
-      (minutes % 1440) / 60
-    );
+  const hours = Math.floor(
+    (minutes % 1440) / 60
+  );
 
-  const mins =
-    minutes % 60;
+  const mins = minutes % 60;
 
   if (days > 0) {
-    return `${days} д ${hours} ч`;
+    return `Осталось: ${days} д ${hours} ч`;
   }
 
   if (hours > 0) {
-    return `${hours} ч ${mins} мин`;
+    return `Осталось: ${hours} ч ${mins} мин`;
   }
 
-  return `${Math.max(
+  return `Осталось: ${Math.max(
     1,
     mins
   )} мин`;
+}
+
+function getPlace(
+  score: number,
+  sortedScores: number[]
+) {
+  const index =
+    sortedScores.findIndex(
+      (value) =>
+        value === score
+    );
+
+  return index + 1;
+}
+
+function getResultStyle(
+  place: number
+) {
+  if (place === 1) {
+    return {
+      background:
+        "linear-gradient(135deg, #fff4b0 0%, #e8c547 100%)",
+      border:
+        "1px solid #d4af37",
+      boxShadow:
+        "0 4px 14px rgba(212, 175, 55, 0.25)",
+      color: "#5c4700",
+    };
+  }
+
+  if (place === 2) {
+    return {
+      background:
+        "linear-gradient(135deg, #f2f2f2 0%, #c9c9c9 100%)",
+      border:
+        "1px solid #a9a9a9",
+      boxShadow:
+        "0 4px 14px rgba(150, 150, 150, 0.20)",
+      color: "#404040",
+    };
+  }
+
+  if (place === 3) {
+    return {
+      background:
+        "linear-gradient(135deg, #f0d0b0 0%, #c98555 100%)",
+      border:
+        "1px solid #b87333",
+      boxShadow:
+        "0 4px 14px rgba(184, 115, 51, 0.20)",
+      color: "#5a2f16",
+    };
+  }
+
+  return {
+    background:
+      "rgba(128,128,128,0.10)",
+    border:
+      "1px solid transparent",
+    boxShadow: "none",
+    color: "inherit",
+  };
+}
+
+function getPlaceEmoji(
+  place: number
+) {
+  if (place === 1) {
+    return "🥇";
+  }
+
+  if (place === 2) {
+    return "🥈";
+  }
+
+  if (place === 3) {
+    return "🥉";
+  }
+
+  return `${place}.`;
 }
 
 export default function RankedPollScreen({
@@ -225,11 +297,31 @@ export default function RankedPollScreen({
               over.id
           );
 
-        return arrayMove(
-          items,
+        if (
+          oldIndex === -1 ||
+          newIndex === -1
+        ) {
+          return items;
+        }
+
+        const copy = [
+          ...items,
+        ];
+
+        const [
+          movedItem,
+        ] = copy.splice(
           oldIndex,
-          newIndex
+          1
         );
+
+        copy.splice(
+          newIndex,
+          0,
+          movedItem
+        );
+
+        return copy;
       }
     );
   };
@@ -257,6 +349,25 @@ export default function RankedPollScreen({
           b.score - a.score
       );
 
+  const sortedScores =
+    sortedResults.map(
+      (option) =>
+        option.score
+    );
+
+  const uniqueSortedScores =
+    Array.from(
+      new Set(
+        sortedScores
+      )
+    );
+
+  const timeText =
+    getTimeText(
+      poll.ends_at,
+      now
+    );
+
   return (
     <main className="app">
       <button
@@ -272,25 +383,26 @@ export default function RankedPollScreen({
         {poll.title}
       </h1>
 
-      <div
-        style={{
-          marginTop: 8,
-          marginBottom: 18,
-          padding: "10px 12px",
-          borderRadius: 12,
-          background:
-            pollExpired
-              ? "rgba(255, 80, 80, 0.10)"
-              : "rgba(100, 150, 255, 0.10)",
-          fontSize: 14,
-        }}
-      >
-        {pollExpired
-          ? "🔴 Голосование завершено"
-          : `⏳ Осталось: ${getTimeText(
-              poll.ends_at
-            )}`}
-      </div>
+      {timeText && (
+        <div
+          style={{
+            marginTop: 8,
+            marginBottom: 18,
+            padding:
+              "10px 12px",
+            borderRadius: 12,
+            background:
+              pollExpired
+                ? "rgba(255, 80, 80, 0.10)"
+                : "rgba(100, 150, 255, 0.10)",
+            fontSize: 14,
+          }}
+        >
+          {pollExpired
+            ? "🔴 Голосование завершено"
+            : `⏳ ${timeText}`}
+        </div>
+      )}
 
       {canEdit && (
         <>
@@ -405,46 +517,94 @@ export default function RankedPollScreen({
           >
             {sortedResults.map(
               (
-                option,
-                index
-              ) => (
-                <div
-                  key={
-                    option.id
-                  }
-                  style={{
-                    display:
-                      "flex",
-                    alignItems:
-                      "center",
-                    gap: 10,
-                    padding:
-                      "12px 14px",
-                    borderRadius:
-                      14,
-                    background:
-                      "rgba(128,128,128,0.10)",
-                  }}
-                >
-                  <strong>
-                    {index + 1}.
-                  </strong>
+                option
+              ) => {
+                const place =
+                  getPlace(
+                    option.score,
+                    sortedScores
+                  );
 
-                  <span
+                const resultStyle =
+                  getResultStyle(
+                    place
+                  );
+
+                return (
+                  <div
+                    key={
+                      option.id
+                    }
                     style={{
-                      flex: 1,
+                      display:
+                        "flex",
+                      alignItems:
+                        "center",
+                      gap: 10,
+                      padding:
+                        "13px 14px",
+                      borderRadius:
+                        14,
+                      background:
+                        resultStyle.background,
+                      border:
+                        resultStyle.border,
+                      boxShadow:
+                        resultStyle.boxShadow,
+                      color:
+                        resultStyle.color,
                     }}
                   >
-                    {
-                      option.text
-                    }
-                  </span>
+                    <strong
+                      style={{
+                        minWidth: 34,
+                        fontSize:
+                          place <=
+                          3
+                            ? 22
+                            : 16,
+                      }}
+                    >
+                      {getPlaceEmoji(
+                        place
+                      )}
+                    </strong>
 
-                  <strong>
-                    {option.score}
-                  </strong>
-                </div>
-              )
+                    <span
+                      style={{
+                        flex: 1,
+                        fontWeight:
+                          place <=
+                          3
+                            ? 600
+                            : 400,
+                      }}
+                    >
+                      {
+                        option.text
+                      }
+                    </span>
+
+                    <strong
+                      style={{
+                        fontSize:
+                          16,
+                      }}
+                    >
+                      {option.score}{" "}
+                      {option.score ===
+                        1
+                        ? "балл"
+                        : option.score >=
+                            2 &&
+                          option.score <=
+                            4
+                        ? "балла"
+                        : "баллов"}
+                    </strong>
+                  </div>
+                );
+              }
             )}
           </div>
         </section>
