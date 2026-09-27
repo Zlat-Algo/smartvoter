@@ -72,36 +72,38 @@ export function sharePoll(
   pollId: string,
   title: string
 ) {
-  const pollLink =
-    `https://t.me/smart_voter_bot?startapp=${pollId}`;
+  const previewUrl =
+    `https://smartvoter-tau.vercel.app/poll/${encodeURIComponent(
+      pollId
+    )}`;
+
+  const telegramUrl =
+    `https://t.me/smart_voter_bot?startapp=${encodeURIComponent(
+      pollId
+    )}`;
+
+  const shareText =
+    `🗳️ ${title}\n\nОткрыть голосование:`;
 
   const shareUrl =
     `https://t.me/share/url?url=${encodeURIComponent(
-      pollLink
+      previewUrl
     )}&text=${encodeURIComponent(
-      `🗳️ Голосование: ${title}`
+      shareText
     )}`;
 
-  if (
-    window.Telegram?.WebApp
-      ?.openTelegramLink
-  ) {
-    window.Telegram.WebApp.openTelegramLink(
+  const tg =
+    window.Telegram?.WebApp;
+
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(
       shareUrl
     );
     return;
   }
 
-  navigator.clipboard
-    .writeText(pollLink)
-    .then(() => {
-      alert(
-        `Ссылка скопирована:\n\n${pollLink}`
-      );
-    })
-    .catch(() => {
-      alert(
-        `Ссылка на голосование:\n\n${pollLink}`
-      );
-    });
+  window.open(
+    shareUrl,
+    "_blank"
+  );
 }
