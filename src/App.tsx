@@ -18,6 +18,10 @@ import {
 } from "./lib/telegram";
 
 import {
+  authenticateTelegram,
+} from "./lib/telegramAuth";
+
+import {
   createPoll,
   getMyPolls,
   getPoll,
@@ -39,149 +43,131 @@ import type {
 } from "./types/poll";
 
 export default function App() {
-  const [
-    screen,
-    setScreen,
-  ] = useState<Screen>(
-    "home"
-  );
+  const [screen, setScreen] =
+    useState<Screen>("home");
 
-  const [
-    poll,
-    setPoll,
-  ] = useState<Poll | null>(
-    null
-  );
+  const [poll, setPoll] =
+    useState<Poll | null>(null);
 
-  const [
-    options,
-    setOptions,
-  ] = useState<
-    PollOption[]
-  >([]);
+  const [options, setOptions] =
+    useState<PollOption[]>([]);
 
-  const [
-    myPolls,
-    setMyPolls,
-  ] = useState<Poll[]>(
-    []
-  );
+  const [myPolls, setMyPolls] =
+    useState<Poll[]>([]);
 
-  const [
-    voted,
-    setVoted,
-  ] = useState(false);
+  const [voted, setVoted] =
+    useState(false);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(false);
+  const [loading, setLoading] =
+    useState(false);
 
-  const [
-    voteCounts,
-    setVoteCounts,
-  ] = useState<
-    Record<string, number>
-  >({});
+  const [voteCounts, setVoteCounts] =
+    useState<Record<string, number>>({});
 
-  const [
-    rankedScores,
-    setRankedScores,
-  ] = useState<
-    Record<string, number>
-  >({});
+  const [rankedScores, setRankedScores] =
+    useState<Record<string, number>>({});
 
   const [
     rankedParticipantCount,
     setRankedParticipantCount,
   ] = useState(0);
 
+  const [now, setNow] =
+    useState(Date.now());
+
   const [
-    now,
-    setNow,
-  ] = useState(
-    Date.now()
-  );
+    authenticatedUserId,
+    setAuthenticatedUserId,
+  ] = useState<number | null>(null);
 
   const telegramName =
     getTelegramUserName();
 
   const telegramUserId =
+    authenticatedUserId ??
     getTelegramUserId();
 
   useEffect(() => {
-    initTelegram();
+    async function startApp() {
+      initTelegram();
 
-    const startParam =
-      getStartParam();
+      try {
+        const user =
+          await authenticateTelegram();
 
-    if (startParam) {
-      openPoll(startParam);
+        setAuthenticatedUserId(user.id);
+
+        const startParam =
+          getStartParam();
+
+        if (startParam) {
+          await openPoll(startParam);
+        }
+      } catch (error) {
+        console.error(
+          "Telegram authentication failed:",
+          error
+        );
+
+        alert(
+          "Не удалось подтвердить Telegram-пользователя. Откройте SmartVoter внутри Telegram."
+        );
+      }
     }
+
+    startApp();
   }, []);
 
   useEffect(() => {
     const timer =
       window.setInterval(() => {
-        setNow(
-          Date.now()
-        );
+        setNow(Date.now());
       }, 30000);
 
     return () =>
-      window.clearInterval(
-        timer
-      );
+      window.clearInterval(timer);
   }, []);
 
   async function openPoll(
     pollId: string
   ) {
+    setLoading(true);
+
     try {
-      setLoading(true);
+      const loadedPoll =
+        await getPoll(pollId);
 
-      const [
-        pollData,
-        optionData,
-      ] =
-        await Promise.all([
-          getPoll(pollId),
-          getPollOptions(
-            pollId
-          ),
-        ]);
+      const loadedOptions =
+        await getPollOptions(pollId);
 
-      setPoll(pollData);
-      setOptions(
-        optionData
-      );
+      setPoll(loadedPoll);
+      setOptions(loadedOptions);
 
       const userId =
+        authenticatedUserId ??
         getTelegramUserId();
 
-      if (userId) {
+      if (userId !== null) {
         const userVoted =
           await hasUserVoted(
             pollId,
             userId,
-            pollData.voting_method
+            loadedPoll.voting_method
           );
 
-        setVoted(
-          userVoted
-        );
+        setVoted(userVoted);
       } else {
         setVoted(false);
       }
 
       if (
-        pollData.voting_method ===
+        loadedPoll.voting_method ===
         "ranked"
       ) {
         const results =
           await getRankedResults(
             pollId,
-            optionData.length
+            loadedOptions.length
           );
 
         setRankedScores(
@@ -191,27 +177,19 @@ export default function App() {
         setRankedParticipantCount(
           results.participantCount
         );
-
-        setVoteCounts({});
       } else {
         const counts =
           await getVoteCounts(
             pollId
           );
 
-        setVoteCounts(
-          counts
-        );
-
-        setRankedScores({});
-        setRankedParticipantCount(
-          0
-        );
+        setVoteCounts(counts);
       }
 
       setScreen("poll");
     } catch (error) {
       console.error(
+        "Failed to open poll:",
         error
       );
 
@@ -231,25 +209,35 @@ export default function App() {
     endsAt: string | null,
     allowRevoting: boolean
   ) {
-    try {
-      setLoading(true);
+    if (
+      authenticatedUserId === null
+    ) {
+      alert(
+        "Пользователь Telegram не подтверждён."
+      );
+      return;
+    }
 
-      const pollData =
+    setLoading(true);
+
+    try {
+      const newPoll =
         await createPoll(
           title,
           optionTexts,
           votingMethod,
-          telegramUserId,
+          authenticatedUserId,
           resultsVisibility,
           endsAt,
           allowRevoting
         );
 
       await openPoll(
-        pollData.id
+        newPoll.id
       );
     } catch (error) {
       console.error(
+        "Failed to create poll:",
         error
       );
 
@@ -264,39 +252,21 @@ export default function App() {
   async function handleVote(
     optionId: string
   ) {
-    if (!poll) {
-      return;
-    }
-
     if (
-      poll.ends_at &&
-      new Date(
-        poll.ends_at
-      ).getTime() <=
-        Date.now()
+      !poll ||
+      authenticatedUserId === null
     ) {
-      alert(
-        "Срок голосования уже истёк."
-      );
       return;
     }
 
-    if (!telegramUserId) {
-      alert(
-        "Не удалось определить пользователя Telegram."
-      );
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-
       await vote(
         poll.id,
         optionId,
-        telegramUserId,
-        poll.allow_revoting ??
-          true
+        authenticatedUserId,
+        poll.allow_revoting ?? true
       );
 
       setVoted(true);
@@ -306,22 +276,20 @@ export default function App() {
           poll.id
         );
 
-      setVoteCounts(
-        counts
-      );
+      setVoteCounts(counts);
     } catch (error) {
       console.error(
+        "Failed to vote:",
         error
       );
 
       if (
-        error instanceof
-          Error &&
+        error instanceof Error &&
         error.message ===
           "ALREADY_VOTED"
       ) {
         alert(
-          "Вы уже голосовали."
+          "Вы уже голосовали в этом голосовании."
         );
       } else {
         alert(
@@ -334,41 +302,23 @@ export default function App() {
   }
 
   async function handleRankedVote(
-    orderedOptionIds: string[]
+    rankedOptionIds: string[]
   ) {
-    if (!poll) {
-      return;
-    }
-
     if (
-      poll.ends_at &&
-      new Date(
-        poll.ends_at
-      ).getTime() <=
-        Date.now()
+      !poll ||
+      authenticatedUserId === null
     ) {
-      alert(
-        "Срок голосования уже истёк."
-      );
       return;
     }
 
-    if (!telegramUserId) {
-      alert(
-        "Не удалось определить пользователя Telegram."
-      );
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-
       await rankedVote(
         poll.id,
-        orderedOptionIds,
-        telegramUserId,
-        poll.allow_revoting ??
-          true
+        rankedOptionIds,
+        authenticatedUserId,
+        poll.allow_revoting ?? true
       );
 
       setVoted(true);
@@ -388,17 +338,17 @@ export default function App() {
       );
     } catch (error) {
       console.error(
+        "Failed to save ranked vote:",
         error
       );
 
       if (
-        error instanceof
-          Error &&
+        error instanceof Error &&
         error.message ===
           "ALREADY_VOTED"
       ) {
         alert(
-          "Вы уже голосовали."
+          "Вы уже голосовали в этом голосовании."
         );
       } else {
         alert(
@@ -411,35 +361,33 @@ export default function App() {
   }
 
   async function loadMyPolls() {
-    if (!telegramUserId) {
+    if (
+      authenticatedUserId === null
+    ) {
       alert(
-        "Не удалось определить пользователя Telegram."
+        "Пользователь Telegram не подтверждён."
       );
       return;
     }
 
-    try {
-      setLoading(true);
+    setLoading(true);
 
+    try {
       const polls =
         await getMyPolls(
-          telegramUserId
+          authenticatedUserId
         );
 
-      setMyPolls(
-        polls
-      );
-
-      setScreen(
-        "myPolls"
-      );
+      setMyPolls(polls);
+      setScreen("myPolls");
     } catch (error) {
       console.error(
+        "Failed to load polls:",
         error
       );
 
       alert(
-        "Не удалось загрузить голосования."
+        "Не удалось загрузить мои голосования."
       );
     } finally {
       setLoading(false);
@@ -449,28 +397,33 @@ export default function App() {
   async function handleDeletePoll(
     pollId: string
   ) {
-    if (!telegramUserId) {
+    if (
+      authenticatedUserId === null
+    ) {
       return;
     }
 
-    try {
-      setLoading(true);
+    const confirmed =
+      window.confirm(
+        "Удалить это голосование?"
+      );
 
+    if (!confirmed) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
       await deletePoll(
         pollId,
-        telegramUserId
+        authenticatedUserId
       );
 
-      setMyPolls(
-        (current) =>
-          current.filter(
-            (item) =>
-              item.id !==
-              pollId
-          )
-      );
+      await loadMyPolls();
     } catch (error) {
       console.error(
+        "Failed to delete poll:",
         error
       );
 
@@ -493,117 +446,109 @@ export default function App() {
     );
   }
 
-  if (
-    screen === "home"
-  ) {
-    return (
-      <HomeScreen
-        telegramName={
-          telegramName
-        }
-        loading={loading}
-        setScreen={
-          setScreen
-        }
-        loadMyPolls={
-          loadMyPolls
-        }
-      />
-    );
+  function goHome() {
+    setScreen("home");
+    setPoll(null);
+    setOptions([]);
+    setVoted(false);
+    setVoteCounts({});
+    setRankedScores({});
+    setRankedParticipantCount(0);
   }
 
-  if (
-    screen === "create"
-  ) {
-    return (
-      <CreatePoll
-        loading={loading}
-        setScreen={
-          setScreen
-        }
-        onCreate={
-          handleCreate
-        }
-      />
-    );
-  }
-
-  if (
-    screen === "myPolls"
-  ) {
-    return (
-      <MyPolls
-        polls={myPolls}
-        loading={loading}
-        setScreen={
-          setScreen
-        }
-        openPoll={
-          openPoll
-        }
-        onDeletePoll={
-          handleDeletePoll
-        }
-      />
-    );
-  }
-
-  if (
-    screen === "poll" &&
-    poll
-  ) {
-    if (
-      poll.voting_method ===
-      "ranked"
-    ) {
-      return (
-        <RankedPollScreen
-          poll={poll}
-          options={options}
-          voted={voted}
-          loading={loading}
-          now={now}
-          rankedScores={
-            rankedScores
+  return (
+    <>
+      {screen === "home" && (
+        <HomeScreen
+          telegramName={telegramName}
+          onCreate={() =>
+            setScreen("create")
           }
-          rankedParticipantCount={
-            rankedParticipantCount
-          }
-          setScreen={
-            setScreen
-          }
-          onVote={
-            handleRankedVote
-          }
-          onShare={
-            handleShare
-          }
+          onMyPolls={loadMyPolls}
         />
-      );
-    }
+      )}
 
-    return (
-      <PollScreen
-        poll={poll}
-        options={options}
-        voted={voted}
-        loading={loading}
-        now={now}
-        voteCounts={
-          voteCounts
-        }
-        setScreen={
-          setScreen
-        }
-        onVote={
-          handleVote
-        }
-        onShare={
-          handleShare
-        }
-      />
-    );
-  }
+      {screen === "create" && (
+        <CreatePoll
+          onCreate={handleCreate}
+          onBack={goHome}
+        />
+      )}
 
-  return null;
+      {screen === "myPolls" && (
+        <MyPolls
+          polls={myPolls}
+          now={now}
+          onOpen={openPoll}
+          onDelete={handleDeletePoll}
+          onBack={goHome}
+        />
+      )}
+
+      {screen === "poll" &&
+        poll &&
+        poll.voting_method ===
+          "plurality" && (
+          <PollScreen
+            poll={poll}
+            options={options}
+            voted={voted}
+            loading={loading}
+            voteCounts={voteCounts}
+            now={now}
+            onVote={handleVote}
+            onShare={handleShare}
+            onBack={goHome}
+          />
+        )}
+
+      {screen === "poll" &&
+        poll &&
+        poll.voting_method ===
+          "ranked" && (
+          <RankedPollScreen
+            poll={poll}
+            options={options}
+            voted={voted}
+            loading={loading}
+            rankedScores={rankedScores}
+            participantCount={
+              rankedParticipantCount
+            }
+            now={now}
+            onVote={handleRankedVote}
+            onShare={handleShare}
+            onBack={goHome}
+          />
+        )}
+
+      {loading && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "none",
+            zIndex: 999,
+          }}
+        >
+          <div
+            style={{
+              padding: "10px 16px",
+              borderRadius: 12,
+              background:
+                "rgba(0, 0, 0, 0.08)",
+              backdropFilter:
+                "blur(8px)",
+              fontSize: 14,
+            }}
+          >
+            Загрузка…
+          </div>
+        </div>
+      )}
+    </>
+  );
 }
