@@ -4,12 +4,29 @@ import type {
 } from "@vercel/node";
 
 import sharp from "sharp";
+import fs from "fs";
+import path from "path";
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL;
 
 const SUPABASE_KEY =
   process.env.VITE_SUPABASE_KEY;
+
+/*
+ * Реально загружаем TTF из репозитория.
+ *
+ * Файл должен находиться здесь:
+ *
+ * api/fonts/DejaVuSans.ttf
+ */
+const FONT_PATH =
+  path.join(
+    process.cwd(),
+    "api",
+    "fonts",
+    "DejaVuSans.ttf"
+  );
 
 type Poll = {
   id: string;
@@ -43,14 +60,8 @@ function escapeXml(
 ) {
   return value
     .replace(/&/g, "&amp;")
-    .replace(
-      /</g,
-      "&lt;"
-    )
-    .replace(
-      />/g,
-      "&gt;"
-    )
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
     .replace(
       /"/g,
       "&quot;"
@@ -406,6 +417,33 @@ function wrapText(
   );
 }
 
+/*
+ * Читаем TTF и превращаем его в Base64.
+ *
+ * Благодаря этому SVG получает настоящий файл
+ * шрифта, а не просто название системного шрифта.
+ */
+function getEmbeddedFont() {
+  if (
+    !fs.existsSync(
+      FONT_PATH
+    )
+  ) {
+    throw new Error(
+      `FONT_NOT_FOUND: ${FONT_PATH}`
+    );
+  }
+
+  const fontBuffer =
+    fs.readFileSync(
+      FONT_PATH
+    );
+
+  return fontBuffer.toString(
+    "base64"
+  );
+}
+
 function buildSvg(
   poll: Poll,
   options: PollOption[],
@@ -413,19 +451,21 @@ function buildSvg(
     counts?: Record<string, number>;
     seatCounts?: Record<string, number>;
     participantCount: number;
-  } | null
+  } | null,
+  fontBase64: string
 ) {
   const width = 1200;
   const height = 675;
 
   /*
-   * DejaVu Sans поддерживает кириллицу
-   * в окружении Vercel/sharp.
+   * ВАЖНО:
+   * Этот шрифт не предполагается установленным
+   * на сервере Vercel.
    *
-   * Важно: шрифт указываем первым.
+   * Он встроен непосредственно в SVG.
    */
   const fontFamily =
-    "'DejaVu Sans', 'Noto Sans', Arial, sans-serif";
+    "SmartVoterFont";
 
   const titleLines =
     wrapText(
@@ -704,6 +744,15 @@ function buildSvg(
 
       <defs>
 
+        <style>
+          @font-face {
+            font-family: "${fontFamily}";
+            src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
+            font-weight: 100 900;
+            font-style: normal;
+          }
+        </style>
+
         <linearGradient
           id="background"
           x1="0"
@@ -861,11 +910,20 @@ export default async function handler(
       }
     }
 
+    /*
+     * Загружаем настоящий TTF.
+     * Если GitHub/Vercel не включил файл,
+     * здесь сразу будет понятная ошибка.
+     */
+    const fontBase64 =
+      getEmbeddedFont();
+
     const svg =
       buildSvg(
         poll,
         options,
-        results
+        results,
+        fontBase64
       );
 
     const jpeg =
