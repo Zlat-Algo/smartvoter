@@ -4,7 +4,9 @@ declare global {
       WebApp?: {
         ready: () => void;
         expand: () => void;
+
         initData: string;
+
         initDataUnsafe?: {
           start_param?: string;
           user?: {
@@ -13,7 +15,10 @@ declare global {
             username?: string;
           };
         };
-        openTelegramLink?: (url: string) => void;
+
+        openTelegramLink?: (
+          url: string
+        ) => void;
       };
     };
   }
@@ -24,23 +29,41 @@ export function initTelegram() {
   window.Telegram?.WebApp?.expand();
 }
 
+export function getTelegramInitData(): string {
+  return (
+    window.Telegram?.WebApp
+      ?.initData ?? ""
+  );
+}
+
+/*
+ * Временно оставляем получение ID
+ * для существующего интерфейса.
+ *
+ * Позже записи в базу будут
+ * проверяться сервером.
+ */
 export function getTelegramUserId(): number | null {
   return (
-    window.Telegram?.WebApp?.initDataUnsafe?.user?.id ??
+    window.Telegram?.WebApp
+      ?.initDataUnsafe?.user?.id ??
     null
   );
 }
 
 export function getTelegramUserName(): string {
   return (
-    window.Telegram?.WebApp?.initDataUnsafe?.user
-      ?.first_name ?? "пользователь"
+    window.Telegram?.WebApp
+      ?.initDataUnsafe?.user
+      ?.first_name ??
+    "пользователь"
   );
 }
 
 export function getStartParam(): string | null {
   return (
-    window.Telegram?.WebApp?.initDataUnsafe?.start_param ??
+    window.Telegram?.WebApp
+      ?.initDataUnsafe?.start_param ??
     null
   );
 }
@@ -59,17 +82,26 @@ export function sharePoll(
       `🗳️ Голосование: ${title}`
     )}`;
 
-  if (window.Telegram?.WebApp?.openTelegramLink) {
-    window.Telegram.WebApp.openTelegramLink(shareUrl);
+  if (
+    window.Telegram?.WebApp
+      ?.openTelegramLink
+  ) {
+    window.Telegram.WebApp.openTelegramLink(
+      shareUrl
+    );
     return;
   }
 
   navigator.clipboard
     .writeText(pollLink)
     .then(() => {
-      alert(`Ссылка скопирована:\n\n${pollLink}`);
+      alert(
+        `Ссылка скопирована:\n\n${pollLink}`
+      );
     })
     .catch(() => {
-      alert(`Ссылка на голосование:\n\n${pollLink}`);
+      alert(
+        `Ссылка на голосование:\n\n${pollLink}`
+      );
     });
 }
