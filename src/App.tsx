@@ -43,6 +43,7 @@ import type {
   Screen,
   VotingMethod,
   ResultsVisibility,
+  ParliamentaryResults,
 } from "./types/poll";
 
 export default function App() {
@@ -80,25 +81,29 @@ export default function App() {
   const [rankedParticipantCount, setRankedParticipantCount] =
     useState(0);
 
-  const [parliamentaryAllocation, setParliamentaryAllocation] =
-    useState<string[]>([]);
-
-  const [parliamentaryCounts, setParliamentaryCounts] =
-    useState<Record<string, number>>(
-      {}
+  const [
+    parliamentaryResults,
+    setParliamentaryResults,
+  ] =
+    useState<ParliamentaryResults | null>(
+      null
     );
-
-  const [parliamentaryParticipantCount, setParliamentaryParticipantCount] =
-    useState(0);
 
   const [now, setNow] =
     useState(Date.now());
 
-  const [authenticatedUserId, setAuthenticatedUserId] =
+  const [
+    authenticatedUserId,
+    setAuthenticatedUserId,
+  ] =
     useState<number | null>(null);
 
   const telegramName =
     getTelegramUserName();
+
+  const telegramUserId =
+    authenticatedUserId ??
+    getTelegramUserId();
 
   useEffect(() => {
     async function startApp() {
@@ -157,21 +162,19 @@ export default function App() {
         await getPoll(pollId);
 
       const loadedOptions =
-        await getPollOptions(pollId);
+        await getPollOptions(
+          pollId
+        );
 
       setPoll(loadedPoll);
-      setOptions(
-        loadedOptions
-      );
+      setOptions(loadedOptions);
 
       const userId =
         userIdOverride ??
         authenticatedUserId ??
         getTelegramUserId();
 
-      if (
-        userId !== null
-      ) {
+      if (userId !== null) {
         const userVoted =
           await hasUserVoted(
             pollId,
@@ -179,9 +182,7 @@ export default function App() {
             loadedPoll.voting_method
           );
 
-        setVoted(
-          userVoted
-        );
+        setVoted(userVoted);
       } else {
         setVoted(false);
       }
@@ -203,6 +204,10 @@ export default function App() {
         setRankedParticipantCount(
           results.participantCount
         );
+
+        setParliamentaryResults(
+          null
+        );
       } else if (
         loadedPoll.voting_method ===
         "parliamentary"
@@ -212,17 +217,14 @@ export default function App() {
             pollId
           );
 
-        setParliamentaryAllocation(
-          results.allocation
+        setParliamentaryResults(
+          results
         );
 
-        setParliamentaryCounts(
-          results.counts
-        );
-
-        setParliamentaryParticipantCount(
-          results.participantCount
-        );
+        setVoteCounts({});
+        setParticipantCount(0);
+        setRankedScores({});
+        setRankedParticipantCount(0);
       } else {
         const results =
           await getVoteCounts(
@@ -235,6 +237,12 @@ export default function App() {
 
         setParticipantCount(
           results.participantCount
+        );
+
+        setRankedScores({});
+        setRankedParticipantCount(0);
+        setParliamentaryResults(
+          null
         );
       }
 
@@ -267,8 +275,7 @@ export default function App() {
     parliamentarySeats: number | null
   ) {
     if (
-      authenticatedUserId ===
-      null
+      authenticatedUserId === null
     ) {
       alert(
         "Пользователь Telegram не подтверждён."
@@ -317,8 +324,7 @@ export default function App() {
   ) {
     if (
       !poll ||
-      authenticatedUserId ===
-        null
+      authenticatedUserId === null
     ) {
       return;
     }
@@ -374,8 +380,7 @@ export default function App() {
   ) {
     if (
       !poll ||
-      authenticatedUserId ===
-        null
+      authenticatedUserId === null
     ) {
       return;
     }
@@ -428,17 +433,12 @@ export default function App() {
   }
 
   async function handleParliamentaryVote(
-    votes: {
-      optionId: string;
-      stance:
-        | "for"
-        | "against";
-    }[]
+    forOptionIds: string[],
+    againstOptionIds: string[]
   ) {
     if (
       !poll ||
-      authenticatedUserId ===
-        null
+      authenticatedUserId === null
     ) {
       return;
     }
@@ -448,7 +448,8 @@ export default function App() {
     try {
       await parliamentaryVote(
         poll.id,
-        votes
+        forOptionIds,
+        againstOptionIds
       );
 
       setVoted(true);
@@ -458,16 +459,8 @@ export default function App() {
           poll.id
         );
 
-      setParliamentaryAllocation(
-        results.allocation
-      );
-
-      setParliamentaryCounts(
-        results.counts
-      );
-
-      setParliamentaryParticipantCount(
-        results.participantCount
+      setParliamentaryResults(
+        results
       );
     } catch (error) {
       console.error(
@@ -483,6 +476,14 @@ export default function App() {
         alert(
           "Повторное голосование отключено для этого опроса."
         );
+      } else if (
+        error instanceof Error &&
+        error.message ===
+          "EMPTY_PARLIAMENTARY_VOTE"
+      ) {
+        alert(
+          "Выберите хотя бы одну партию: «За» или «Против»."
+        );
       } else {
         alert(
           "Не удалось сохранить голос."
@@ -495,8 +496,7 @@ export default function App() {
 
   async function loadMyPolls() {
     if (
-      authenticatedUserId ===
-      null
+      authenticatedUserId === null
     ) {
       alert(
         "Пользователь Telegram не подтверждён."
@@ -512,13 +512,8 @@ export default function App() {
           authenticatedUserId
         );
 
-      setMyPolls(
-        polls
-      );
-
-      setScreen(
-        "myPolls"
-      );
+      setMyPolls(polls);
+      setScreen("myPolls");
     } catch (error) {
       console.error(
         "Failed to load polls:",
@@ -537,8 +532,7 @@ export default function App() {
     pollId: string
   ) {
     if (
-      authenticatedUserId ===
-      null
+      authenticatedUserId === null
     ) {
       return;
     }
@@ -559,13 +553,11 @@ export default function App() {
         pollId
       );
 
-      setMyPolls(
-        (current) =>
-          current.filter(
-            (item) =>
-              item.id !==
-              pollId
-          )
+      setMyPolls((current) =>
+        current.filter(
+          (item) =>
+            item.id !== pollId
+        )
       );
     } catch (error) {
       console.error(
@@ -600,17 +592,9 @@ export default function App() {
     setVoteCounts({});
     setParticipantCount(0);
     setRankedScores({});
-    setRankedParticipantCount(
-      0
-    );
-    setParliamentaryAllocation(
-      []
-    );
-    setParliamentaryCounts(
-      {}
-    );
-    setParliamentaryParticipantCount(
-      0
+    setRankedParticipantCount(0);
+    setParliamentaryResults(
+      null
     );
   }
 
@@ -621,13 +605,9 @@ export default function App() {
           telegramName={
             telegramName
           }
-          loading={
-            loading
-          }
+          loading={loading}
           onCreate={() =>
-            setScreen(
-              "create"
-            )
+            setScreen("create")
           }
           onMyPolls={
             loadMyPolls
@@ -637,36 +617,22 @@ export default function App() {
 
       {screen === "create" && (
         <CreatePoll
-          loading={
-            loading
-          }
-          onCreate={
-            handleCreate
-          }
-          onBack={
-            goHome
-          }
+          loading={loading}
+          onCreate={handleCreate}
+          onBack={goHome}
         />
       )}
 
       {screen === "myPolls" && (
         <MyPolls
-          polls={
-            myPolls
-          }
+          polls={myPolls}
           now={now}
-          loading={
-            loading
-          }
-          onOpen={
-            openPoll
-          }
+          loading={loading}
+          onOpen={openPoll}
           onDelete={
             handleDeletePoll
           }
-          onBack={
-            goHome
-          }
+          onBack={goHome}
         />
       )}
 
@@ -678,15 +644,9 @@ export default function App() {
           "parliamentary" && (
           <PollScreen
             poll={poll}
-            options={
-              options
-            }
-            voted={
-              voted
-            }
-            loading={
-              loading
-            }
+            options={options}
+            voted={voted}
+            loading={loading}
             voteCounts={
               voteCounts
             }
@@ -694,15 +654,11 @@ export default function App() {
               participantCount
             }
             now={now}
-            onVote={
-              handleVote
-            }
+            onVote={handleVote}
             onShare={
               handleShare
             }
-            onBack={
-              goHome
-            }
+            onBack={goHome}
           />
         )}
 
@@ -712,15 +668,9 @@ export default function App() {
           "ranked" && (
           <RankedPollScreen
             poll={poll}
-            options={
-              options
-            }
-            voted={
-              voted
-            }
-            loading={
-              loading
-            }
+            options={options}
+            voted={voted}
+            loading={loading}
             rankedScores={
               rankedScores
             }
@@ -734,9 +684,7 @@ export default function App() {
             onShare={
               handleShare
             }
-            onBack={
-              goHome
-            }
+            onBack={goHome}
           />
         )}
 
@@ -746,23 +694,11 @@ export default function App() {
           "parliamentary" && (
           <ParliamentaryPollScreen
             poll={poll}
-            options={
-              options
-            }
-            voted={
-              voted
-            }
-            loading={
-              loading
-            }
-            allocation={
-              parliamentaryAllocation
-            }
-            counts={
-              parliamentaryCounts
-            }
-            participantCount={
-              parliamentaryParticipantCount
+            options={options}
+            voted={voted}
+            loading={loading}
+            results={
+              parliamentaryResults
             }
             now={now}
             onVote={
@@ -771,9 +707,7 @@ export default function App() {
             onShare={
               handleShare
             }
-            onBack={
-              goHome
-            }
+            onBack={goHome}
           />
         )}
 
