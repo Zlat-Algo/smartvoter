@@ -12,44 +12,28 @@ async function callTelegramApi(
   action: string,
   payload: Record<string, unknown> = {}
 ) {
-  const initData =
-    getTelegramInitData();
+  const initData = getTelegramInitData();
 
   if (!initData) {
-    throw new Error(
-      "TELEGRAM_NOT_AVAILABLE"
-    );
+    throw new Error("TELEGRAM_NOT_AVAILABLE");
   }
 
   const { data, error } =
-    await supabase.functions.invoke(
-      "telegram-api",
-      {
-        body: {
-          action,
-          initData,
-          ...payload,
-        },
-      }
-    );
+    await supabase.functions.invoke("telegram-api", {
+      body: {
+        action,
+        initData,
+        ...payload,
+      },
+    });
 
   if (error) {
-    console.error(
-      "Telegram API error:",
-      error
-    );
-
+    console.error("Telegram API error:", error);
     throw error;
   }
 
-  if (
-    data &&
-    data.ok === false
-  ) {
-    throw new Error(
-      data.error ??
-        "API_ERROR"
-    );
+  if (data?.ok === false) {
+    throw new Error(data.error ?? "API_ERROR");
   }
 
   return data;
@@ -67,22 +51,18 @@ export async function createPoll(
   shuffleOptions: boolean,
   showParticipantCount: boolean
 ) {
-  const data =
-    await callTelegramApi(
-      "create_poll",
-      {
-        title,
-        description,
-        options,
-        votingMethod,
-        resultsVisibility,
-        endsAt,
-        allowRevoting,
-        maxChoices,
-        shuffleOptions,
-        showParticipantCount,
-      }
-    );
+  const data = await callTelegramApi("create_poll", {
+    title,
+    description,
+    options,
+    votingMethod,
+    resultsVisibility,
+    endsAt,
+    allowRevoting,
+    maxChoices,
+    shuffleOptions,
+    showParticipantCount,
+  });
 
   return data.poll as Poll;
 }
@@ -90,12 +70,11 @@ export async function createPoll(
 export async function getPoll(
   pollId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("polls")
-      .select("*")
-      .eq("id", pollId)
-      .single();
+  const { data, error } = await supabase
+    .from("polls")
+    .select("*")
+    .eq("id", pollId)
+    .single();
 
   if (error) {
     throw error;
@@ -107,262 +86,190 @@ export async function getPoll(
 export async function getPollOptions(
   pollId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("poll_options")
-      .select("*")
-      .eq("poll_id", pollId)
-      .order("position", {
-        ascending: true,
-      });
+  const { data, error } = await supabase
+    .from("poll_options")
+    .select("*")
+    .eq("poll_id", pollId)
+    .order("position", {
+      ascending: true,
+    });
 
   if (error) {
     throw error;
   }
 
-  return data as PollOption[];
+  return (data ?? []) as PollOption[];
 }
 
-export async function getMyPolls() {
-  const data =
-    await callTelegramApi(
-      "get_my_polls"
-    );
+export async function getMyPolls(
+  telegramUserId: number
+) {
+  const { data, error } = await supabase
+    .from("polls")
+    .select("*")
+    .eq("creator_telegram_id", telegramUserId)
+    .order("created_at", {
+      ascending: false,
+    });
 
-  return (data.polls ??
-    []) as Poll[];
+  if (error) {
+    throw error;
+  }
+
+  const polls = (data ?? []) as Poll[];
+
+  const pollsWithCounts = await Promise.all(
+    polls.map(async (poll) => {
+      const participants = new Set<number>();
+
+      const { data: votes } = await supabase
+        .from("votes")
+        .select("telegram_user_id")
+        .eq("poll_id", poll.id);
+
+      for (const vote of votes ?? []) {
+        participants.add(vote.telegram_user_id);
+      }
+
+      const { data: rankedVotes } = await supabase
+        .from("ranked_votes")
+        .select("telegram_user_id")
+        .eq("poll_id", poll.id);
+
+      for (const vote of rankedVotes ?? []) {
+        participants.add(vote.telegram_user_id);
+      }
+
+      return {
+        ...poll,
+        participant_count: participants.size,
+      };
+    })
+  );
+
+  return pollsWithCounts;
 }
 
 export async function hasUserVoted(
   pollId: string,
   telegramUserId: number,
-  votingMethod: VotingMethod
+  votingMethod: string
 ) {
-  if (
-    votingMethod ===
-    "ranked"
-  ) {
-    const { data, error } =
-      await supabase
-        .from("ranked_votes")
-        .select("id")
-        .eq(
-          "poll_id",
-          pollId
-        )
-        .eq(
-          "telegram_user_id",
-          telegramUserId
-        )
-        .limit(1);
+  if (votingMethod === "ranked") {
+    const { data, error } = await supabase
+      .from("ranked_votes")
+      .select("id")
+      .eq("poll_id", pollId)
+      .eq("telegram_user_id", telegramUserId)
+      .limit(1);
 
     if (error) {
       throw error;
     }
 
-    return (
-      (data?.length ?? 0) > 0
-    );
+    return (data?.length ?? 0) > 0;
   }
 
-  const { data, error } =
-    await supabase
-      .from("votes")
-      .select("id")
-      .eq(
-        "poll_id",
-        pollId
-      )
-      .eq(
-        "telegram_user_id",
-        telegramUserId
-      )
-      .limit(1);
+  const { data, error } = await supabase
+    .from("votes")
+    .select("id")
+    .eq("poll_id", pollId)
+    .eq("telegram_user_id", telegramUserId)
+    .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return (
-    (data?.length ?? 0) > 0
-  );
+  return (data?.length ?? 0) > 0;
 }
 
 export async function vote(
   pollId: string,
   optionIds: string[]
 ) {
-  return await callTelegramApi(
-    "vote",
-    {
-      pollId,
-      optionIds,
-    }
-  );
+  return callTelegramApi("vote", {
+    pollId,
+    optionIds,
+  });
 }
 
 export async function rankedVote(
   pollId: string,
   rankedOptionIds: string[]
 ) {
-  return await callTelegramApi(
-    "ranked_vote",
-    {
-      pollId,
-      rankedOptionIds,
-    }
-  );
+  return callTelegramApi("ranked_vote", {
+    pollId,
+    rankedOptionIds,
+  });
 }
 
 export async function getVoteCounts(
   pollId: string
 ) {
-  const { data, error } =
-    await supabase
-      .from("votes")
-      .select(
-        "option_id, telegram_user_id"
-      )
-      .eq(
-        "poll_id",
-        pollId
-      );
+  const { data, error } = await supabase
+    .from("votes")
+    .select("option_id, telegram_user_id")
+    .eq("poll_id", pollId);
 
   if (error) {
     throw error;
   }
 
-  const counts: Record<
-    string,
-    number
-  > = {};
+  const counts: Record<string, number> = {};
+  const participants = new Set<number>();
 
-  for (
-    const vote of
-      data ?? []
-  ) {
+  for (const vote of data ?? []) {
     counts[vote.option_id] =
-      (counts[
-        vote.option_id
-      ] ?? 0) + 1;
+      (counts[vote.option_id] ?? 0) + 1;
+
+    participants.add(vote.telegram_user_id);
   }
 
-  return counts;
-}
-
-export async function getParticipantCount(
-  pollId: string,
-  votingMethod: VotingMethod
-) {
-  if (
-    votingMethod ===
-    "ranked"
-  ) {
-    const { data, error } =
-      await supabase
-        .from("ranked_votes")
-        .select(
-          "telegram_user_id"
-        )
-        .eq(
-          "poll_id",
-          pollId
-        );
-
-    if (error) {
-      throw error;
-    }
-
-    return new Set(
-      (data ?? []).map(
-        (item) =>
-          item.telegram_user_id
-      )
-    ).size;
-  }
-
-  const { data, error } =
-    await supabase
-      .from("votes")
-      .select(
-        "telegram_user_id"
-      )
-      .eq(
-        "poll_id",
-        pollId
-      );
-
-  if (error) {
-    throw error;
-  }
-
-  return new Set(
-    (data ?? []).map(
-      (item) =>
-        item.telegram_user_id
-    )
-  ).size;
+  return {
+    counts,
+    participantCount: participants.size,
+  };
 }
 
 export async function getRankedResults(
   pollId: string,
   optionCount: number
 ) {
-  const { data, error } =
-    await supabase
-      .from("ranked_votes")
-      .select(
-        "option_id, rank, telegram_user_id"
-      )
-      .eq(
-        "poll_id",
-        pollId
-      );
+  const { data, error } = await supabase
+    .from("ranked_votes")
+    .select(
+      "option_id, rank, telegram_user_id"
+    )
+    .eq("poll_id", pollId);
 
   if (error) {
     throw error;
   }
 
-  const scores: Record<
-    string,
-    number
-  > = {};
+  const scores: Record<string, number> = {};
+  const participants = new Set<number>();
 
-  const participants =
-    new Set<number>();
-
-  for (
-    const vote of
-      data ?? []
-  ) {
-    participants.add(
-      vote.telegram_user_id
-    );
+  for (const vote of data ?? []) {
+    participants.add(vote.telegram_user_id);
 
     const score =
-      optionCount -
-      vote.rank;
+      optionCount - vote.rank;
 
     scores[vote.option_id] =
-      (scores[
-        vote.option_id
-      ] ?? 0) + score;
+      (scores[vote.option_id] ?? 0) + score;
   }
 
   return {
     scores,
-    participantCount:
-      participants.size,
+    participantCount: participants.size,
   };
 }
 
 export async function deletePoll(
   pollId: string
 ) {
-  return await callTelegramApi(
-    "delete_poll",
-    {
-      pollId,
-    }
-  );
+  return callTelegramApi("delete_poll", {
+    pollId,
+  });
 }
