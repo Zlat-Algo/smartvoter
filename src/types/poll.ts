@@ -9,12 +9,18 @@ export type VotingMethod =
   | "multiple"
   | "ranked"
   | "yes_no"
-  | "rating";
+  | "rating"
+  | "parliamentary";
 
 export type ResultsVisibility =
   | "always"
   | "after_vote"
   | "after_expiration";
+
+export type ParliamentaryStance =
+  | "for"
+  | "against"
+  | "none";
 
 export type PollOption = {
   id: string;
@@ -44,5 +50,13 @@ export type Poll = {
 
   show_participant_count: boolean;
 
+  parliamentary_seats: number | null;
+
   participant_count?: number;
+};
+
+export type ParliamentaryResult = {
+  allocation: string[];
+  counts: Record<string, number>;
+  participantCount: number;
 };
