@@ -1,66 +1,146 @@
 import {
+  useEffect,
   useMemo,
   useState,
 } from "react";
 
 import type {
-  ParliamentaryStance,
   Poll,
   PollOption,
+  ParliamentaryResults,
 } from "../types/poll";
+
+type Stance =
+  | "for"
+  | "against"
+  | "neutral";
 
 type Props = {
   poll: Poll;
   options: PollOption[];
   voted: boolean;
   loading: boolean;
-  allocation: string[];
-  counts: Record<string, number>;
-  participantCount: number;
+  results: ParliamentaryResults | null;
   now: number;
-
   onVote: (
-    votes: {
-      optionId: string;
-      stance: "for" | "against";
-    }[]
+    forOptionIds: string[],
+    againstOptionIds: string[]
   ) => void;
-
   onShare: () => void;
   onBack: () => void;
 };
+
+function getPartyColor(
+  optionIndex: number
+) {
+  return `hsl(${(
+    (optionIndex * 137.508) %
+    360
+  )} 70% 55%)`;
+}
+
+function formatDate(
+  value: string
+) {
+  return new Date(value).toLocaleString(
+    "ru-RU",
+    {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }
+  );
+}
+
+function getTimeLeft(
+  endsAt: string,
+  now: number
+) {
+  const difference =
+    new Date(endsAt).getTime() - now;
+
+  if (difference <= 0) {
+    return "Голосование завершено";
+  }
+
+  const totalMinutes = Math.floor(
+    difference / 60000
+  );
+
+  const days = Math.floor(
+    totalMinutes / 1440
+  );
+
+  const hours = Math.floor(
+    (totalMinutes % 1440) / 60
+  );
+
+  const minutes =
+    totalMinutes % 60;
+
+  if (days > 0) {
+    return `Осталось ${days} д. ${hours} ч.`;
+  }
+
+  if (hours > 0) {
+    return `Осталось ${hours} ч. ${minutes} мин.`;
+  }
+
+  return `Осталось ${Math.max(
+    minutes,
+    1
+  )} мин.`;
+}
 
 export default function ParliamentaryPollScreen({
   poll,
   options,
   voted,
   loading,
-  allocation,
-  counts,
-  participantCount,
+  results,
   now,
   onVote,
   onShare,
   onBack,
 }: Props) {
   const [stances, setStances] =
-    useState<
-      Record<
-        string,
-        ParliamentaryStance
-      >
-    >({});
+    useState<Record<string, Stance>>(
+      {}
+    );
 
-  const [voteError, setVoteError] =
+  const [error, setError] =
     useState("");
 
-  const expired =
-    !!poll.ends_at &&
-    new Date(
-      poll.ends_at
-    ).getTime() <= now;
+  useEffect(() => {
+    const initial: Record<
+      string,
+      Stance
+    > = {};
 
-  const canSeeResults =
+    for (const option of options) {
+      initial[option.id] = "neutral";
+    }
+
+    setStances(initial);
+    setError("");
+  }, [poll.id, options]);
+
+  const isExpired =
+    poll.ends_at !== null &&
+    new Date(poll.ends_at).getTime() <=
+      now;
+
+  const canRevote =
+    poll.allow_revoting;
+
+  const canVote =
+    !loading &&
+    !isExpired &&
+    (!voted || canRevote);
+
+  const resultsVisible =
     poll.results_visibility ===
       "always" ||
     (
@@ -71,111 +151,102 @@ export default function ParliamentaryPollScreen({
     (
       poll.results_visibility ===
         "after_expiration" &&
-      expired
+      isExpired
     );
 
-  const hasActiveChoice =
-    Object.values(stances).some(
-      (stance) =>
-        stance === "for" ||
-        stance === "against"
-    );
+  const groupedAllocation =
+    useMemo(() => {
+      if (!results) {
+        return [];
+      }
 
-  const optionMap = useMemo(
-    () =>
-      new Map(
-        options.map(
-          (option) => [
-            option.id,
-            option,
-          ]
+      return [...options]
+        .sort(
+          (a, b) =>
+            a.position - b.position
         )
-      ),
-    [options]
-  );
+        .flatMap((option) => {
+          const count =
+            results.seatCounts[
+              option.id
+            ] ?? 0;
+
+          return Array.from(
+            { length: count },
+            () => option.id
+          );
+        });
+    }, [options, results]);
+
+  const sortedOptions =
+    useMemo(() => {
+      return [...options].sort(
+        (a, b) =>
+          a.position - b.position
+      );
+    }, [options]);
 
   function setStance(
     optionId: string,
-    stance: ParliamentaryStance
+    stance: Stance
   ) {
-    if (
-      loading ||
-      (voted &&
-        !poll.allow_revoting)
-    ) {
+    if (!canVote) {
       return;
     }
 
-    setVoteError("");
+    setError("");
 
     setStances((current) => ({
       ...current,
-      [optionId]:
-        current[optionId] === stance
-          ? "none"
-          : stance,
+      [optionId]: stance,
     }));
   }
 
-  function submit() {
-    if (
-      expired ||
-      loading
-    ) {
+  function handleSubmit() {
+    if (!canVote) {
       return;
     }
 
-    if (
-      voted &&
-      !poll.allow_revoting
-    ) {
-      return;
-    }
+    const forOptionIds =
+      options
+        .filter(
+          (option) =>
+            stances[option.id] === "for"
+        )
+        .map((option) => option.id);
 
-    if (!hasActiveChoice) {
-      setVoteError(
+    const againstOptionIds =
+      options
+        .filter(
+          (option) =>
+            stances[option.id] ===
+            "against"
+        )
+        .map((option) => option.id);
+
+    if (
+      forOptionIds.length === 0 &&
+      againstOptionIds.length === 0
+    ) {
+      setError(
         "Выберите хотя бы одну партию: «За» или «Против»."
       );
       return;
     }
 
-    const votes =
-      Object.entries(stances)
-        .filter(
-          (
-            [, stance]
-          ) =>
-            stance === "for" ||
-            stance === "against"
-        )
-        .map(
-          ([
-            optionId,
-            stance,
-          ]) => ({
-            optionId,
-            stance:
-              stance as
-                | "for"
-                | "against",
-          })
-        );
+    setError("");
 
-    onVote(votes);
-  }
-
-  function formatNumber(
-    value: number
-  ) {
-    return new Intl.NumberFormat(
-      "ru-RU"
-    ).format(value);
+    onVote(
+      forOptionIds,
+      againstOptionIds
+    );
   }
 
   return (
-    <main className="page">
+    <div className="page">
       <div className="screen-header">
         <button
+          type="button"
           className="back-button"
           onClick={onBack}
           disabled={loading}
@@ -183,437 +254,641 @@ export default function ParliamentaryPollScreen({
           ←
         </button>
 
-        <div className="screen-header-title">
-          Парламентское голосование
-        </div>
-
-        <div className="header-spacer" />
-      </div>
-
-      <section className="form-content">
-        <div className="form-intro">
-          <div className="form-icon">
-            🏛️
-          </div>
-
-          <div>
-            <h1>
-              {poll.title}
-            </h1>
-
-            {poll.description && (
-              <p>
-                {poll.description}
-              </p>
-            )}
-          </div>
-        </div>
-
         <div
-          className="settings-card"
           style={{
-            marginBottom: 18,
+            flex: 1,
+            minWidth: 0,
           }}
         >
-          <div className="setting-row">
-            <div className="setting-copy">
-              <strong>
-                Мест в парламенте
-              </strong>
-
-              <span>
-                Одно место = один
-                квадрат
-              </span>
-            </div>
-
-            <strong>
-              {formatNumber(
-                poll.parliamentary_seats ??
-                  0
-              )}
-            </strong>
+          <div
+            style={{
+              fontSize: 13,
+              opacity: 0.65,
+              marginBottom: 4,
+            }}
+          >
+            Парламентское голосование
           </div>
 
-          {poll.show_participant_count && (
-            <div className="setting-row">
-              <div className="setting-copy">
-                <strong>
-                  Участники
-                </strong>
+          <h1
+            style={{
+              margin: 0,
+              wordBreak: "break-word",
+            }}
+          >
+            {poll.title}
+          </h1>
+        </div>
 
-                <span>
-                  Проголосовали
-                </span>
+        <button
+          type="button"
+          onClick={onShare}
+          disabled={loading}
+          style={{
+            border: "none",
+            background:
+              "rgba(127,127,127,0.12)",
+            borderRadius: 12,
+            minWidth: 44,
+            minHeight: 44,
+            fontSize: 20,
+            cursor: "pointer",
+          }}
+          aria-label="Поделиться"
+        >
+          ↗
+        </button>
+      </div>
+
+      <div className="form-content">
+        {poll.description && (
+          <div
+            className="form-intro"
+            style={{
+              marginBottom: 16,
+            }}
+          >
+            {poll.description}
+          </div>
+        )}
+
+        <div
+          className="form-section"
+          style={{
+            marginBottom: 16,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <div
+              style={{
+                padding:
+                  "8px 12px",
+                borderRadius: 10,
+                background:
+                  "rgba(127,127,127,0.12)",
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              🏛️ {poll.parliamentary_seats ?? 450} мест
+            </div>
+
+            {poll.ends_at && (
+              <div
+                style={{
+                  padding:
+                    "8px 12px",
+                  borderRadius: 10,
+                  background:
+                    isExpired
+                      ? "rgba(220,53,69,0.12)"
+                      : "rgba(127,127,127,0.12)",
+                  fontSize: 14,
+                }}
+              >
+                {isExpired
+                  ? "Голосование завершено"
+                  : getTimeLeft(
+                      poll.ends_at,
+                      now
+                    )}
               </div>
+            )}
+          </div>
 
-              <strong>
-                {formatNumber(
-                  participantCount
-                )}
-              </strong>
+          {poll.ends_at && (
+            <div
+              style={{
+                marginTop: 8,
+                fontSize: 13,
+                opacity: 0.6,
+              }}
+            >
+              Окончание:{" "}
+              {formatDate(
+                poll.ends_at
+              )}
             </div>
           )}
         </div>
 
-        {!expired && (
-          <div className="form-section">
-            <div className="field-label">
-              Ваша позиция
-            </div>
-
-            <div className="section-hint">
-              Для каждой партии выберите
-              «За», «Против» или ничего.
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 10,
-                marginTop: 12,
-              }}
-            >
-              {options.map(
-                (option) => {
-                  const stance =
-                    stances[
-                      option.id
-                    ] ??
-                    "none";
-
-                  return (
-                    <div
-                      key={option.id}
-                      style={{
-                        padding: 12,
-                        borderRadius: 16,
-                        border:
-                          "1px solid var(--tg-theme-hint-color, rgba(0,0,0,.1))",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontWeight: 700,
-                          marginBottom: 10,
-                        }}
-                      >
-                        {option.text}
-                      </div>
-
-                      <div
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns:
-                            "1fr 1fr 1fr",
-                          gap: 6,
-                        }}
-                      >
-                        <button
-                          type="button"
-                          className={
-                            stance ===
-                            "for"
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() =>
-                            setStance(
-                              option.id,
-                              "for"
-                            )
-                          }
-                          disabled={
-                            loading ||
-                            (
-                              voted &&
-                              !poll.allow_revoting
-                            )
-                          }
-                        >
-                          За
-                        </button>
-
-                        <button
-                          type="button"
-                          className={
-                            stance ===
-                            "none"
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() =>
-                            setStance(
-                              option.id,
-                              "none"
-                            )
-                          }
-                          disabled={
-                            loading ||
-                            (
-                              voted &&
-                              !poll.allow_revoting
-                            )
-                          }
-                        >
-                          —
-                        </button>
-
-                        <button
-                          type="button"
-                          className={
-                            stance ===
-                            "against"
-                              ? "primary-button"
-                              : "secondary-button"
-                          }
-                          onClick={() =>
-                            setStance(
-                              option.id,
-                              "against"
-                            )
-                          }
-                          disabled={
-                            loading ||
-                            (
-                              voted &&
-                              !poll.allow_revoting
-                            )
-                          }
-                        >
-                          Против
-                        </button>
-                      </div>
-                    </div>
-                  );
-                }
-              )}
-            </div>
-
-            {voteError && (
-              <div
-                style={{
-                  color: "#d93025",
-                  fontSize: 13,
-                  marginTop: 10,
-                }}
-              >
-                {voteError}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="primary-button create-button"
-              onClick={submit}
-              disabled={
-                loading ||
-                (
-                  voted &&
-                  !poll.allow_revoting
-                )
-              }
-              style={{
-                marginTop: 14,
-              }}
-            >
-              {loading
-                ? "Сохраняем…"
-                : voted
-                ? "Изменить голос"
-                : "Проголосовать"}
-            </button>
+        <div
+          className="form-section"
+          style={{
+            marginBottom: 20,
+          }}
+        >
+          <div className="field-label">
+            Голосование
           </div>
-        )}
 
-        {expired && (
           <div
-            className="settings-card"
             style={{
-              marginBottom: 18,
+              fontSize: 14,
+              lineHeight: 1.5,
+              opacity: 0.7,
+              marginBottom: 14,
             }}
           >
-            <strong>
-              Голосование завершено
-            </strong>
+            Для каждой партии выберите
+            «За», «Против» или
+            «Нейтрально». Можно одобрить
+            и отклонить несколько партий.
           </div>
-        )}
 
-        {canSeeResults && (
-          <div className="form-section">
-            <div className="field-label">
-              Состав парламента
-            </div>
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              gap: 10,
+            }}
+          >
+            {sortedOptions.map(
+              (option, index) => {
+                const stance =
+                  stances[
+                    option.id
+                  ] ?? "neutral";
 
-            <div className="section-hint">
-              {formatNumber(
-                allocation.length
-              )}{" "}
-              из{" "}
-              {formatNumber(
-                poll.parliamentary_seats ??
-                  0
-              )}{" "}
-              мест распределено
-            </div>
+                const partyColor =
+                  getPartyColor(index);
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fill, minmax(16px, 1fr))",
-                gap: 3,
-                marginTop: 14,
-                maxWidth: 520,
-              }}
-            >
-              {allocation.map(
-                (
-                  optionId,
-                  index
-                ) => {
-                  const option =
-                    optionMap.get(
-                      optionId
-                    );
-
-                  return (
+                return (
+                  <div
+                    key={option.id}
+                    style={{
+                      border:
+                        "1px solid rgba(127,127,127,0.2)",
+                      borderRadius: 14,
+                      padding: 12,
+                      background:
+                        "rgba(127,127,127,0.04)",
+                    }}
+                  >
                     <div
-                      key={`${optionId}-${index}`}
-                      title={
-                        option?.text ??
-                        "Партия"
-                      }
                       style={{
-                        width: "100%",
-                        aspectRatio:
-                          "1",
-                        borderRadius:
-                          3,
-                        background:
-                          getPartyColor(
-                            optionId,
-                            options
-                          ),
-                      }}
-                    />
-                  );
-                }
-              )}
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gap: 8,
-                marginTop: 18,
-              }}
-            >
-              {options
-                .filter(
-                  (option) =>
-                    (
-                      counts[
-                        option.id
-                      ] ?? 0
-                    ) > 0
-                )
-                .map(
-                  (option) => (
-                    <div
-                      key={option.id}
-                      style={{
-                        display:
-                          "flex",
+                        display: "flex",
                         alignItems:
                           "center",
-                        gap: 8,
+                        gap: 9,
+                        marginBottom: 10,
                       }}
                     >
                       <span
                         style={{
                           width: 12,
                           height: 12,
+                          minWidth: 12,
                           borderRadius: 3,
-                          flexShrink: 0,
-                          background:
-                            getPartyColor(
-                              option.id,
-                              options
-                            ),
+                          backgroundColor:
+                            partyColor,
                         }}
                       />
 
-                      <span
+                      <strong
                         style={{
-                          flex: 1,
-                          minWidth: 0,
+                          wordBreak:
+                            "break-word",
+                          lineHeight: 1.3,
                         }}
                       >
                         {option.text}
-                      </span>
-
-                      <strong>
-                        {
-                          counts[
-                            option.id
-                          ]
-                        }
                       </strong>
                     </div>
-                  )
-                )}
-            </div>
+
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns:
+                          "repeat(3, minmax(0, 1fr))",
+                        gap: 7,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        disabled={
+                          !canVote
+                        }
+                        onClick={() =>
+                          setStance(
+                            option.id,
+                            "for"
+                          )
+                        }
+                        style={{
+                          minHeight: 44,
+                          borderRadius: 10,
+                          border:
+                            "1px solid rgba(40,167,69,0.35)",
+                          background:
+                            stance ===
+                            "for"
+                              ? "rgba(40,167,69,0.18)"
+                              : "transparent",
+                          color:
+                            "inherit",
+                          fontWeight:
+                            stance ===
+                            "for"
+                              ? 700
+                              : 500,
+                          cursor:
+                            canVote
+                              ? "pointer"
+                              : "default",
+                        }}
+                      >
+                        За
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          !canVote
+                        }
+                        onClick={() =>
+                          setStance(
+                            option.id,
+                            "neutral"
+                          )
+                        }
+                        style={{
+                          minHeight: 44,
+                          borderRadius: 10,
+                          border:
+                            "1px solid rgba(127,127,127,0.3)",
+                          background:
+                            stance ===
+                            "neutral"
+                              ? "rgba(127,127,127,0.16)"
+                              : "transparent",
+                          color:
+                            "inherit",
+                          fontWeight:
+                            stance ===
+                            "neutral"
+                              ? 700
+                              : 500,
+                          cursor:
+                            canVote
+                              ? "pointer"
+                              : "default",
+                        }}
+                      >
+                        Нейтрально
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={
+                          !canVote
+                        }
+                        onClick={() =>
+                          setStance(
+                            option.id,
+                            "against"
+                          )
+                        }
+                        style={{
+                          minHeight: 44,
+                          borderRadius: 10,
+                          border:
+                            "1px solid rgba(220,53,69,0.35)",
+                          background:
+                            stance ===
+                            "against"
+                              ? "rgba(220,53,69,0.16)"
+                              : "transparent",
+                          color:
+                            "inherit",
+                          fontWeight:
+                            stance ===
+                            "against"
+                              ? 700
+                              : 500,
+                          cursor:
+                            canVote
+                              ? "pointer"
+                              : "default",
+                        }}
+                      >
+                        Против
+                      </button>
+                    </div>
+                  </div>
+                );
+              }
+            )}
           </div>
-        )}
 
-        <button
-          type="button"
-          className="secondary-button"
-          onClick={onShare}
-          disabled={loading}
-          style={{
-            width: "100%",
-            marginTop: 8,
-          }}
-        >
-          Поделиться
-        </button>
-      </section>
-    </main>
-  );
-}
+          {error && (
+            <div
+              style={{
+                marginTop: 12,
+                padding: 11,
+                borderRadius: 10,
+                background:
+                  "rgba(220,53,69,0.1)",
+                color:
+                  "rgb(190,40,55)",
+                fontSize: 14,
+                lineHeight: 1.4,
+              }}
+            >
+              {error}
+            </div>
+          )}
 
-function getPartyColor(
-  optionId: string,
-  options: PollOption[]
-) {
-  const index =
-    options.findIndex(
-      (option) =>
-        option.id === optionId
-    );
+          {voted &&
+            !poll.allow_revoting &&
+            !isExpired && (
+              <div
+                style={{
+                  marginTop: 12,
+                  fontSize: 13,
+                  opacity: 0.65,
+                  lineHeight: 1.4,
+                }}
+              >
+                Вы уже проголосовали.
+                Повторное голосование
+                отключено.
+              </div>
+            )}
 
-  const colors = [
-    "#4F46E5",
-    "#DB2777",
-    "#059669",
-    "#D97706",
-    "#0891B2",
-    "#7C3AED",
-    "#DC2626",
-    "#65A30D",
-    "#9333EA",
-    "#0284C7",
-  ];
+          {isExpired && (
+            <div
+              style={{
+                marginTop: 12,
+                fontSize: 13,
+                opacity: 0.65,
+              }}
+            >
+              Голосование завершено.
+            </div>
+          )}
 
-  return (
-    colors[
-      Math.max(
-        0,
-        index
-      ) %
-        colors.length
-    ]
+          {!isExpired &&
+            (!voted ||
+              poll.allow_revoting) && (
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleSubmit}
+                disabled={!canVote}
+                style={{
+                  width: "100%",
+                  marginTop: 14,
+                }}
+              >
+                {loading
+                  ? "Сохранение…"
+                  : voted &&
+                    poll.allow_revoting
+                  ? "Изменить голос"
+                  : "Проголосовать"}
+              </button>
+            )}
+        </div>
+
+        <div className="form-section">
+          <div className="field-label">
+            Результаты
+          </div>
+
+          {!resultsVisible ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 14,
+                background:
+                  "rgba(127,127,127,0.08)",
+                fontSize: 14,
+                lineHeight: 1.5,
+                opacity: 0.75,
+              }}
+            >
+              {poll.results_visibility ===
+              "after_vote"
+                ? "Результаты станут доступны после вашего голосования."
+                : "Результаты станут доступны после окончания голосования."}
+            </div>
+          ) : !results ? (
+            <div
+              style={{
+                padding: 16,
+                borderRadius: 14,
+                background:
+                  "rgba(127,127,127,0.08)",
+                fontSize: 14,
+                opacity: 0.7,
+              }}
+            >
+              Загрузка результатов…
+            </div>
+          ) : (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 8,
+                  marginBottom: 14,
+                }}
+              >
+                <div
+                  style={{
+                    padding:
+                      "8px 12px",
+                    borderRadius: 10,
+                    background:
+                      "rgba(127,127,127,0.12)",
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  🏛️ {results.seats} мест
+                </div>
+
+                {poll.show_participant_count && (
+                  <div
+                    style={{
+                      padding:
+                        "8px 12px",
+                      borderRadius: 10,
+                      background:
+                        "rgba(127,127,127,0.12)",
+                      fontSize: 14,
+                    }}
+                  >
+                    👥{" "}
+                    {
+                      results.participantCount
+                    }{" "}
+                    участников
+                  </div>
+                )}
+              </div>
+
+              <div
+                style={{
+                  marginBottom: 16,
+                  fontSize: 13,
+                  lineHeight: 1.45,
+                  opacity: 0.65,
+                }}
+              >
+                Каждый мандат
+                распределяется
+                последовательно по сумме
+                позиций голосов «За» и
+                «Против».
+              </div>
+
+              <div
+                style={{
+                  width: "100%",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(auto-fill, minmax(12px, 1fr))",
+                    gap: 3,
+                    width: "100%",
+                  }}
+                >
+                  {groupedAllocation.map(
+                    (
+                      optionId,
+                      index
+                    ) => {
+                      const optionIndex =
+                        sortedOptions.findIndex(
+                          (option) =>
+                            option.id ===
+                            optionId
+                        );
+
+                      const option =
+                        sortedOptions[
+                          optionIndex
+                        ];
+
+                      return (
+                        <div
+                          key={`${optionId}-${index}`}
+                          title={
+                            option?.text ??
+                            "Партия"
+                          }
+                          aria-label={
+                            option?.text ??
+                            "Партия"
+                          }
+                          style={{
+                            width: "100%",
+                            aspectRatio:
+                              "1",
+                            borderRadius: 3,
+                            backgroundColor:
+                              getPartyColor(
+                                Math.max(
+                                  optionIndex,
+                                  0
+                                )
+                              ),
+                          }}
+                        />
+                      );
+                    }
+                  )}
+                </div>
+              </div>
+
+              <div
+                style={{
+                  marginTop: 18,
+                  display: "flex",
+                  flexDirection:
+                    "column",
+                  gap: 9,
+                }}
+              >
+                {sortedOptions.map(
+                  (option, index) => {
+                    const count =
+                      results.seatCounts[
+                        option.id
+                      ] ?? 0;
+
+                    return (
+                      <div
+                        key={option.id}
+                        style={{
+                          display: "flex",
+                          alignItems:
+                            "center",
+                          gap: 9,
+                          minWidth: 0,
+                        }}
+                      >
+                        <span
+                          style={{
+                            width: 13,
+                            height: 13,
+                            minWidth: 13,
+                            borderRadius: 3,
+                            backgroundColor:
+                              getPartyColor(
+                                index
+                              ),
+                          }}
+                        />
+
+                        <span
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            wordBreak:
+                              "break-word",
+                            lineHeight: 1.3,
+                          }}
+                        >
+                          {option.text}
+                        </span>
+
+                        <strong
+                          style={{
+                            whiteSpace:
+                              "nowrap",
+                          }}
+                        >
+                          {count}{" "}
+                          {count === 1
+                            ? "место"
+                            : count >= 2 &&
+                                count <= 4
+                              ? "места"
+                              : "мест"}
+                        </strong>
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
