@@ -43,9 +43,18 @@ function escapeXml(
 ) {
   return value
     .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
+    .replace(
+      /</g,
+      "&lt;"
+    )
+    .replace(
+      />/g,
+      "&gt;"
+    )
+    .replace(
+      /"/g,
+      "&quot;"
+    )
     .replace(
       /'/g,
       "&apos;"
@@ -201,7 +210,9 @@ async function getParliamentaryResults(
       );
     }
 
-    if (vote.stance === "for") {
+    if (
+      vote.stance === "for"
+    ) {
       user.forIds.add(
         vote.option_id
       );
@@ -226,8 +237,9 @@ async function getParliamentaryResults(
     seat < seats;
     seat++
   ) {
-    let bestOptionId: string | null =
-      null;
+    let bestOptionId:
+      | string
+      | null = null;
 
     let bestScore =
       -Infinity;
@@ -235,10 +247,14 @@ async function getParliamentaryResults(
     let bestPosition =
       Infinity;
 
-    for (const option of options) {
+    for (
+      const option of options
+    ) {
       let score = 0;
 
-      for (const user of users.values()) {
+      for (
+        const user of users.values()
+      ) {
         if (
           user.forIds.has(
             option.id
@@ -288,12 +304,17 @@ async function getParliamentaryResults(
               ] ?? 0;
           }
 
-          const position =
-            -1 /
-            (seats -
-              opposedSeats);
+          const denominator =
+            seats -
+            opposedSeats;
 
-          score += position;
+          if (
+            denominator > 0
+          ) {
+            score +=
+              -1 /
+              denominator;
+          }
         }
       }
 
@@ -334,7 +355,10 @@ function wrapText(
   text: string,
   maxLength: number
 ) {
-  if (text.length <= maxLength) {
+  if (
+    text.length <=
+    maxLength
+  ) {
     return [text];
   }
 
@@ -345,31 +369,41 @@ function wrapText(
 
   let current = "";
 
-  for (const word of words) {
+  for (
+    const word of words
+  ) {
+    const candidate =
+      current
+        ? `${current} ${word}`
+        : word;
+
     if (
-      (
-        current +
-        " " +
-        word
-      ).trim().length >
+      candidate.length >
       maxLength
     ) {
       if (current) {
-        lines.push(current);
+        lines.push(
+          current
+        );
       }
 
       current = word;
     } else {
       current =
-        `${current} ${word}`.trim();
+        candidate;
     }
   }
 
   if (current) {
-    lines.push(current);
+    lines.push(
+      current
+    );
   }
 
-  return lines.slice(0, 3);
+  return lines.slice(
+    0,
+    3
+  );
 }
 
 function buildSvg(
@@ -377,15 +411,21 @@ function buildSvg(
   options: PollOption[],
   results: {
     counts?: Record<string, number>;
-    seatCounts?: Record<
-      string,
-      number
-    >;
+    seatCounts?: Record<string, number>;
     participantCount: number;
   } | null
 ) {
   const width = 1200;
   const height = 675;
+
+  /*
+   * DejaVu Sans поддерживает кириллицу
+   * в окружении Vercel/sharp.
+   *
+   * Важно: шрифт указываем первым.
+   */
+  const fontFamily =
+    "'DejaVu Sans', 'Noto Sans', Arial, sans-serif";
 
   const titleLines =
     wrapText(
@@ -397,16 +437,24 @@ function buildSvg(
   const titleSvg =
     titleLines
       .map(
-        (line, index) =>
-          `<text
+        (
+          line,
+          index
+        ) =>
+          `
+          <text
             x="70"
             y="${115 + index * 54}"
+            font-family="${fontFamily}"
             font-size="48"
             font-weight="800"
             fill="#17191d"
-          >${escapeXml(
-            line
-          )}</text>`
+          >
+            ${escapeXml(
+              line
+            )}
+          </text>
+          `
       )
       .join("");
 
@@ -430,14 +478,15 @@ function buildSvg(
           b.position
       );
 
-    let x = 70;
-    let y = 330;
+    const x = 70;
+    const y = 330;
 
     const squareSize = 18;
     const gap = 4;
     const maxPerRow = 48;
 
-    const seats: string[] = [];
+    const seats: string[] =
+      [];
 
     for (
       const option of sorted
@@ -480,7 +529,8 @@ function buildSvg(
           row *
             (squareSize + gap);
 
-        seats.push(`
+        seats.push(
+          `
           <rect
             x="${sx}"
             y="${sy}"
@@ -491,7 +541,8 @@ function buildSvg(
               index
             )}"
           />
-        `);
+          `
+        );
       }
     }
 
@@ -499,11 +550,17 @@ function buildSvg(
       <text
         x="70"
         y="285"
+        font-family="${fontFamily}"
         font-size="25"
         font-weight="700"
         fill="#555b64"
       >
-        ${poll.parliamentary_seats ?? 450} мест
+        ${escapeXml(
+          String(
+            poll.parliamentary_seats ??
+              450
+          )
+        )} мест
         ${
           poll.show_participant_count
             ? ` · ${results.participantCount} участников`
@@ -564,8 +621,9 @@ function buildSvg(
               <text
                 x="105"
                 y="${y - 5}"
+                font-family="${fontFamily}"
                 font-size="25"
-                font-weight="650"
+                font-weight="600"
                 fill="#22252a"
               >
                 ${escapeXml(
@@ -577,6 +635,7 @@ function buildSvg(
                 x="1080"
                 y="${y - 5}"
                 text-anchor="end"
+                font-family="${fontFamily}"
                 font-size="27"
                 font-weight="800"
                 fill="#17191d"
@@ -615,8 +674,9 @@ function buildSvg(
               <text
                 x="105"
                 y="${y - 5}"
+                font-family="${fontFamily}"
                 font-size="25"
-                font-weight="650"
+                font-weight="600"
                 fill="#22252a"
               >
                 ${escapeXml(
@@ -634,14 +694,16 @@ function buildSvg(
       ? "Результаты"
       : "Голосование";
 
-  const svg = `
+  return `
     <svg
       xmlns="http://www.w3.org/2000/svg"
       width="${width}"
       height="${height}"
       viewBox="0 0 ${width} ${height}"
     >
+
       <defs>
+
         <linearGradient
           id="background"
           x1="0"
@@ -659,6 +721,7 @@ function buildSvg(
             stop-color="#ffffff"
           />
         </linearGradient>
+
       </defs>
 
       <rect
@@ -686,6 +749,7 @@ function buildSvg(
       <text
         x="70"
         y="58"
+        font-family="${fontFamily}"
         font-size="20"
         font-weight="800"
         letter-spacing="3"
@@ -698,11 +762,14 @@ function buildSvg(
         x="1130"
         y="58"
         text-anchor="end"
+        font-family="${fontFamily}"
         font-size="18"
         font-weight="700"
         fill="#70757d"
       >
-        ${badge}
+        ${escapeXml(
+          badge
+        )}
       </text>
 
       ${titleSvg}
@@ -712,16 +779,16 @@ function buildSvg(
       <text
         x="70"
         y="625"
+        font-family="${fontFamily}"
         font-size="18"
         font-weight="600"
         fill="#777d86"
       >
         Откройте голосование в Telegram
       </text>
+
     </svg>
   `;
-
-  return svg;
 }
 
 export default async function handler(
@@ -739,16 +806,20 @@ export default async function handler(
       res.status(400).send(
         "Missing poll id"
       );
+
       return;
     }
 
     const loaded =
-      await getPoll(pollId);
+      await getPoll(
+        pollId
+      );
 
     if (!loaded) {
       res.status(404).send(
         "Poll not found"
       );
+
       return;
     }
 
@@ -769,7 +840,7 @@ export default async function handler(
       ) {
         results =
           await getParliamentaryResults(
-            pollId,
+            poll.id,
             options,
             poll.parliamentary_seats ??
               450
@@ -777,12 +848,13 @@ export default async function handler(
       } else {
         const normal =
           await getNormalResults(
-            pollId
+            poll.id
           );
 
         results = {
           counts:
             normal.counts,
+
           participantCount:
             normal.participantCount,
         };
@@ -801,7 +873,9 @@ export default async function handler(
         Buffer.from(svg)
       )
         .jpeg({
-          quality: 88,
+          quality: 90,
+          chromaSubsampling:
+            "4:4:4",
         })
         .toBuffer();
 
