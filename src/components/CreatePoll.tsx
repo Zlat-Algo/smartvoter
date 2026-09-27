@@ -23,7 +23,9 @@ type Props = {
     maxChoices: number,
     shuffleOptions: boolean,
     showParticipantCount: boolean,
-    parliamentarySeats: number | null
+    parliamentarySeats: number | null,
+    accessMode: "public" | "chat_members",
+    allowedChatId: number | null
   ) => void;
 
   onBack: () => void;
@@ -157,6 +159,14 @@ export default function CreatePoll({
 
   const [parliamentarySeats, setParliamentarySeats] =
     useState(450);
+
+  const [accessMode, setAccessMode] =
+    useState<"public" | "chat_members">(
+      "public"
+    );
+
+  const [allowedChatId, setAllowedChatId] =
+    useState("");
 
   const activeMethod =
     methodInfo.find(
@@ -333,6 +343,42 @@ export default function CreatePoll({
       return;
     }
 
+    let parsedAllowedChatId:
+      | number
+      | null = null;
+
+    if (
+      accessMode ===
+      "chat_members"
+    ) {
+      const value =
+        allowedChatId.trim();
+
+      if (!/^-?\d+$/.test(value)) {
+        alert(
+          "Введите корректный Telegram Chat ID. Например: -1001234567890"
+        );
+        return;
+      }
+
+      const numericValue =
+        Number(value);
+
+      if (
+        !Number.isSafeInteger(
+          numericValue
+        )
+      ) {
+        alert(
+          "Telegram Chat ID слишком большой."
+        );
+        return;
+      }
+
+      parsedAllowedChatId =
+        numericValue;
+    }
+
     const durationConfig =
       durationOptions.find(
         (item) =>
@@ -378,7 +424,9 @@ export default function CreatePoll({
               )
             )
           )
-        : null
+        : null,
+      accessMode,
+      parsedAllowedChatId
     );
   }
 
@@ -763,6 +811,76 @@ export default function CreatePoll({
           </div>
 
           <div className="settings-card">
+            <div className="setting-row">
+              <div className="setting-copy">
+                <strong>
+                  Кто может голосовать
+                </strong>
+
+                <span>
+                  Доступ к голосованию
+                </span>
+              </div>
+
+              <select
+                className="select-input"
+                value={accessMode}
+                onChange={(event) =>
+                  setAccessMode(
+                    event.target
+                      .value as
+                      | "public"
+                      | "chat_members"
+                  )
+                }
+                disabled={loading}
+              >
+                <option value="public">
+                  🌍 Все
+                </option>
+
+                <option value="chat_members">
+                  🔒 Участники чата
+                </option>
+              </select>
+            </div>
+
+            {accessMode ===
+              "chat_members" && (
+              <div
+                style={{
+                  padding:
+                    "0 0 14px 0",
+                }}
+              >
+                <input
+                  className="text-input"
+                  type="text"
+                  inputMode="numeric"
+                  value={allowedChatId}
+                  onChange={(event) =>
+                    setAllowedChatId(
+                      event.target
+                        .value
+                    )
+                  }
+                  placeholder="-1001234567890"
+                  disabled={loading}
+                />
+
+                <div
+                  className="section-hint"
+                  style={{
+                    marginTop: 7,
+                  }}
+                >
+                  Укажи Telegram Chat ID.
+                  Бот должен быть
+                  администратором этого чата.
+                </div>
+              </div>
+            )}
+
             <div className="setting-row">
               <div className="setting-copy">
                 <strong>
