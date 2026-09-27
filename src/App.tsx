@@ -460,12 +460,13 @@ export default function App() {
     <>
       {screen === "home" && (
         <HomeScreen
-          telegramName={telegramName}
-          onCreate={() =>
-            setScreen("create")
-          }
-          onMyPolls={loadMyPolls}
-        />
+  telegramName={telegramName}
+  loading={loading}
+  onCreate={() =>
+    setScreen("create")
+  }
+  onMyPolls={loadMyPolls}
+/>
       )}
 
       {screen === "create" && (
