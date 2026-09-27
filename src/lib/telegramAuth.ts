@@ -1,23 +1,18 @@
 import { supabase } from "../supabase";
 import { getTelegramInitData } from "./telegram";
 
-export type AuthenticatedTelegramUser = {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-};
-
-type AuthResponse = {
+type ApiResponse = {
   ok: boolean;
-  user?: AuthenticatedTelegramUser;
-  start_param?: string | null;
+  user?: {
+    id: number;
+    first_name?: string;
+    last_name?: string;
+    username?: string;
+  };
   error?: string;
 };
 
-export async function authenticateTelegram(): Promise<
-  AuthenticatedTelegramUser
-> {
+export async function authenticateTelegram() {
   const initData =
     getTelegramInitData();
 
@@ -32,6 +27,7 @@ export async function authenticateTelegram(): Promise<
       "telegram-api",
       {
         body: {
+          action: "auth",
           initData,
         },
       }
@@ -39,7 +35,7 @@ export async function authenticateTelegram(): Promise<
 
   if (error) {
     console.error(
-      "Telegram authentication error:",
+      "Telegram auth error:",
       error
     );
 
@@ -49,14 +45,14 @@ export async function authenticateTelegram(): Promise<
   }
 
   const response =
-    data as AuthResponse;
+    data as ApiResponse;
 
   if (
     !response.ok ||
     !response.user
   ) {
     console.error(
-      "Telegram authentication rejected:",
+      "Telegram auth rejected:",
       response.error
     );
 
