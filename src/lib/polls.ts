@@ -4,6 +4,7 @@ import { getTelegramInitData } from "./telegram";
 import type {
   Poll,
   PollOption,
+  ParliamentaryResult,
   ResultsVisibility,
   VotingMethod,
 } from "../types/poll";
@@ -49,7 +50,8 @@ export async function createPoll(
   allowRevoting: boolean,
   maxChoices: number,
   shuffleOptions: boolean,
-  showParticipantCount: boolean
+  showParticipantCount: boolean,
+  parliamentarySeats: number | null
 ) {
   const data = await callTelegramApi("create_poll", {
     title,
@@ -62,6 +64,7 @@ export async function createPoll(
     maxChoices,
     shuffleOptions,
     showParticipantCount,
+    parliamentarySeats,
   });
 
   return data.poll as Poll;
@@ -128,21 +131,42 @@ export async function getMyPolls(
         .eq("poll_id", poll.id);
 
       for (const vote of votes ?? []) {
-        participants.add(vote.telegram_user_id);
+        participants.add(
+          vote.telegram_user_id
+        );
       }
 
-      const { data: rankedVotes } = await supabase
-        .from("ranked_votes")
-        .select("telegram_user_id")
-        .eq("poll_id", poll.id);
+      const { data: rankedVotes } =
+        await supabase
+          .from("ranked_votes")
+          .select("telegram_user_id")
+          .eq("poll_id", poll.id);
 
       for (const vote of rankedVotes ?? []) {
-        participants.add(vote.telegram_user_id);
+        participants.add(
+          vote.telegram_user_id
+        );
+      }
+
+      const { data: parliamentaryVotes } =
+        await supabase
+          .from("parliamentary_votes")
+          .select("telegram_user_id")
+          .eq("poll_id", poll.id);
+
+      for (
+        const vote of
+          parliamentaryVotes ?? []
+      ) {
+        participants.add(
+          vote.telegram_user_id
+        );
       }
 
       return {
         ...poll,
-        participant_count: participants.size,
+        participant_count:
+          participants.size,
       };
     })
   );
@@ -155,33 +179,72 @@ export async function hasUserVoted(
   telegramUserId: number,
   votingMethod: string
 ) {
-  if (votingMethod === "ranked") {
-    const { data, error } = await supabase
-      .from("ranked_votes")
-      .select("id")
-      .eq("poll_id", pollId)
-      .eq("telegram_user_id", telegramUserId)
-      .limit(1);
+  if (
+    votingMethod ===
+    "parliamentary"
+  ) {
+    const { data, error } =
+      await supabase
+        .from("parliamentary_votes")
+        .select("id")
+        .eq("poll_id", pollId)
+        .eq(
+          "telegram_user_id",
+          telegramUserId
+        )
+        .limit(1);
 
     if (error) {
       throw error;
     }
 
-    return (data?.length ?? 0) > 0;
+    return (
+      (data?.length ?? 0) > 0
+    );
   }
 
-  const { data, error } = await supabase
-    .from("votes")
-    .select("id")
-    .eq("poll_id", pollId)
-    .eq("telegram_user_id", telegramUserId)
-    .limit(1);
+  if (
+    votingMethod ===
+    "ranked"
+  ) {
+    const { data, error } =
+      await supabase
+        .from("ranked_votes")
+        .select("id")
+        .eq("poll_id", pollId)
+        .eq(
+          "telegram_user_id",
+          telegramUserId
+        )
+        .limit(1);
+
+    if (error) {
+      throw error;
+    }
+
+    return (
+      (data?.length ?? 0) > 0
+    );
+  }
+
+  const { data, error } =
+    await supabase
+      .from("votes")
+      .select("id")
+      .eq("poll_id", pollId)
+      .eq(
+        "telegram_user_id",
+        telegramUserId
+      )
+      .limit(1);
 
   if (error) {
     throw error;
   }
 
-  return (data?.length ?? 0) > 0;
+  return (
+    (data?.length ?? 0) > 0
+  );
 }
 
 export async function vote(
@@ -204,31 +267,55 @@ export async function rankedVote(
   });
 }
 
+export async function parliamentaryVote(
+  pollId: string,
+  votes: {
+    optionId: string;
+    stance: "for" | "against";
+  }[]
+) {
+  return callTelegramApi(
+    "parliamentary_vote",
+    {
+      pollId,
+      votes,
+    }
+  );
+}
+
 export async function getVoteCounts(
   pollId: string
 ) {
-  const { data, error } = await supabase
-    .from("votes")
-    .select("option_id, telegram_user_id")
-    .eq("poll_id", pollId);
+  const { data, error } =
+    await supabase
+      .from("votes")
+      .select(
+        "option_id, telegram_user_id"
+      )
+      .eq("poll_id", pollId);
 
   if (error) {
     throw error;
   }
 
   const counts: Record<string, number> = {};
-  const participants = new Set<number>();
+  const participants =
+    new Set<number>();
 
   for (const vote of data ?? []) {
     counts[vote.option_id] =
-      (counts[vote.option_id] ?? 0) + 1;
+      (counts[vote.option_id] ?? 0) +
+      1;
 
-    participants.add(vote.telegram_user_id);
+    participants.add(
+      vote.telegram_user_id
+    );
   }
 
   return {
     counts,
-    participantCount: participants.size,
+    participantCount:
+      participants.size,
   };
 }
 
@@ -236,40 +323,76 @@ export async function getRankedResults(
   pollId: string,
   optionCount: number
 ) {
-  const { data, error } = await supabase
-    .from("ranked_votes")
-    .select(
-      "option_id, rank, telegram_user_id"
-    )
-    .eq("poll_id", pollId);
+  const { data, error } =
+    await supabase
+      .from("ranked_votes")
+      .select(
+        "option_id, rank, telegram_user_id"
+      )
+      .eq("poll_id", pollId);
 
   if (error) {
     throw error;
   }
 
-  const scores: Record<string, number> = {};
-  const participants = new Set<number>();
+  const scores: Record<string, number> =
+    {};
+
+  const participants =
+    new Set<number>();
 
   for (const vote of data ?? []) {
-    participants.add(vote.telegram_user_id);
+    participants.add(
+      vote.telegram_user_id
+    );
 
     const score =
       optionCount - vote.rank;
 
     scores[vote.option_id] =
-      (scores[vote.option_id] ?? 0) + score;
+      (scores[vote.option_id] ?? 0) +
+      score;
   }
 
   return {
     scores,
-    participantCount: participants.size,
+    participantCount:
+      participants.size,
+  };
+}
+
+export async function getParliamentaryResults(
+  pollId: string
+): Promise<ParliamentaryResult> {
+  const data =
+    await callTelegramApi(
+      "get_parliamentary_results",
+      {
+        pollId,
+      }
+    );
+
+  return {
+    allocation:
+      Array.isArray(data.allocation)
+        ? data.allocation
+        : [],
+    counts:
+      data.counts ?? {},
+    participantCount:
+      Number(
+        data.participantCount ?? 0
+      ),
   };
 }
 
 export async function deletePoll(
   pollId: string
 ) {
-  return callTelegramApi("delete_poll", {
-    pollId,
-  });
+  return callTelegramApi(
+    "delete_poll",
+    {
+      pollId,
+    }
+  );
 }
