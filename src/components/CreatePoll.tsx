@@ -22,7 +22,8 @@ type Props = {
     allowRevoting: boolean,
     maxChoices: number,
     shuffleOptions: boolean,
-    showParticipantCount: boolean
+    showParticipantCount: boolean,
+    parliamentarySeats: number | null
   ) => void;
 
   onBack: () => void;
@@ -63,6 +64,12 @@ const methodInfo: {
     icon: "⭐",
     title: "Оценка 1–5",
     description: "Оцените что-нибудь",
+  },
+  {
+    id: "parliamentary",
+    icon: "🏛️",
+    title: "Парламентский",
+    description: "Распределение мест с голосами за и против",
   },
 ];
 
@@ -148,6 +155,9 @@ export default function CreatePoll({
   const [showParticipantCount, setShowParticipantCount] =
     useState(true);
 
+  const [parliamentarySeats, setParliamentarySeats] =
+    useState(450);
+
   const activeMethod =
     methodInfo.find(
       (method) =>
@@ -159,7 +169,8 @@ export default function CreatePoll({
     votingMethod !== "rating";
 
   const minOptions =
-    votingMethod === "ranked"
+    votingMethod === "ranked" ||
+    votingMethod === "parliamentary"
       ? 2
       : 1;
 
@@ -176,16 +187,25 @@ export default function CreatePoll({
     value: string
   ) {
     setOptions((current) =>
-      current.map((item, itemIndex) =>
-        itemIndex === index
-          ? value
-          : item
+      current.map(
+        (item, itemIndex) =>
+          itemIndex === index
+            ? value
+            : item
       )
     );
   }
 
   function addOption() {
-    if (options.length >= 20) {
+    const max =
+      votingMethod ===
+      "parliamentary"
+        ? 50
+        : 20;
+
+    if (
+      options.length >= max
+    ) {
       return;
     }
 
@@ -198,7 +218,10 @@ export default function CreatePoll({
   function removeOption(
     index: number
   ) {
-    if (options.length <= minOptions) {
+    if (
+      options.length <=
+      minOptions
+    ) {
       return;
     }
 
@@ -215,12 +238,16 @@ export default function CreatePoll({
   ) {
     setVotingMethod(method);
 
-    if (method === "yes_no") {
+    if (
+      method === "yes_no"
+    ) {
       setOptions([
         "Да",
         "Нет",
       ]);
-    } else if (method === "rating") {
+    } else if (
+      method === "rating"
+    ) {
       setOptions([
         "1",
         "2",
@@ -230,7 +257,9 @@ export default function CreatePoll({
       ]);
     } else {
       setOptions((current) => {
-        if (current.length >= 2) {
+        if (
+          current.length >= 2
+        ) {
           return current;
         }
 
@@ -241,7 +270,9 @@ export default function CreatePoll({
       });
     }
 
-    if (method !== "multiple") {
+    if (
+      method !== "multiple"
+    ) {
       setMaxChoices(1);
     }
   }
@@ -264,7 +295,10 @@ export default function CreatePoll({
 
     setTitleError("");
 
-    if (cleanTitle.length > 200) {
+    if (
+      cleanTitle.length >
+      200
+    ) {
       setTitleError(
         "Название слишком длинное."
       );
@@ -278,7 +312,8 @@ export default function CreatePoll({
 
     if (
       needsCustomOptions &&
-      validOptions.length < minOptions
+      validOptions.length <
+        minOptions
     ) {
       alert(
         `Добавьте минимум ${minOptions} варианта.`
@@ -287,8 +322,10 @@ export default function CreatePoll({
     }
 
     if (
-      votingMethod === "multiple" &&
-      maxChoices > validOptions.length
+      votingMethod ===
+        "multiple" &&
+      maxChoices >
+        validOptions.length
     ) {
       alert(
         "Максимальное количество вариантов не может быть больше количества вариантов ответа."
@@ -299,7 +336,8 @@ export default function CreatePoll({
     const durationConfig =
       durationOptions.find(
         (item) =>
-          item.value === duration
+          item.value ===
+          duration
       );
 
     const endsAt =
@@ -323,11 +361,24 @@ export default function CreatePoll({
       resultsVisibility,
       endsAt,
       allowRevoting,
-      votingMethod === "multiple"
+      votingMethod ===
+      "multiple"
         ? maxChoices
         : 1,
       shuffleOptions,
-      showParticipantCount
+      showParticipantCount,
+      votingMethod ===
+        "parliamentary"
+        ? Math.max(
+            1,
+            Math.min(
+              1000,
+              Math.floor(
+                parliamentarySeats
+              )
+            )
+          )
+        : null
     );
   }
 
@@ -387,6 +438,7 @@ export default function CreatePoll({
             }}
             placeholder="Например: Куда пойдём вечером?"
             maxLength={200}
+            disabled={loading}
           />
 
           {titleError && (
@@ -413,6 +465,7 @@ export default function CreatePoll({
             placeholder="Описание (необязательно)"
             maxLength={1000}
             rows={3}
+            disabled={loading}
           />
         </div>
 
@@ -465,24 +518,77 @@ export default function CreatePoll({
           </div>
         </div>
 
+        {votingMethod ===
+          "parliamentary" && (
+          <div className="form-section">
+            <div className="field-label">
+              Количество мест
+            </div>
+
+            <div className="section-hint">
+              От 1 до 1000. Одно место
+              соответствует одному
+              квадратику в результатах.
+            </div>
+
+            <input
+              className="text-input"
+              type="number"
+              min={1}
+              max={1000}
+              value={
+                parliamentarySeats
+              }
+              onChange={(event) =>
+                setParliamentarySeats(
+                  Math.max(
+                    1,
+                    Math.min(
+                      1000,
+                      Number(
+                        event.target
+                          .value
+                      ) || 1
+                    )
+                  )
+                )
+              }
+              disabled={loading}
+              style={{
+                marginTop: 10,
+              }}
+            />
+          </div>
+        )}
+
         {needsCustomOptions && (
           <div className="form-section">
             <div className="section-heading-row">
               <div>
                 <div className="field-label">
-                  Варианты ответа
+                  {votingMethod ===
+                  "parliamentary"
+                    ? "Партии"
+                    : "Варианты ответа"}
                 </div>
 
                 <div className="section-hint">
                   {votingMethod ===
                   "ranked"
                     ? "Участник расставит их по порядку."
+                    : votingMethod ===
+                      "parliamentary"
+                    ? "Для каждой партии участник сможет выбрать «За», «Против» или ничего."
                     : "Добавьте варианты, из которых будут выбирать."}
                 </div>
               </div>
 
               <span className="count-badge">
-                {validOptions.length}/20
+                {validOptions.length}/
+                {votingMethod ===
+                "parliamentary"
+                  ? 50
+                  : 20}
               </span>
             </div>
 
@@ -512,7 +618,12 @@ export default function CreatePoll({
                             .value
                         )
                       }
-                      placeholder={`Вариант ${index + 1}`}
+                      placeholder={
+                        votingMethod ===
+                        "parliamentary"
+                          ? `Партия ${index + 1}`
+                          : `Вариант ${index + 1}`
+                      }
                       maxLength={200}
                       disabled={loading}
                     />
@@ -546,10 +657,17 @@ export default function CreatePoll({
               disabled={
                 loading ||
                 options.length >=
-                  20
+                  (votingMethod ===
+                  "parliamentary"
+                    ? 50
+                    : 20)
               }
             >
-              ＋ Добавить вариант
+              ＋ Добавить{" "}
+              {votingMethod ===
+              "parliamentary"
+                ? "партию"
+                : "вариант"}
             </button>
 
             {votingMethod ===
@@ -559,6 +677,7 @@ export default function CreatePoll({
                   <strong>
                     Максимум вариантов
                   </strong>
+
                   <span>
                     Сколько ответов можно
                     выбрать
@@ -582,12 +701,16 @@ export default function CreatePoll({
                 >
                   {Array.from(
                     {
-                      length: Math.max(
-                        1,
-                        validOptions.length
-                      ),
+                      length:
+                        Math.max(
+                          1,
+                          validOptions.length
+                        ),
                     },
-                    (_, index) => (
+                    (
+                      _,
+                      index
+                    ) => (
                       <option
                         key={
                           index + 1
