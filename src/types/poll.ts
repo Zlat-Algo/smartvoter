@@ -25,9 +25,11 @@ export type PollOption = {
 export type Poll = {
   id: string;
   title: string;
-  description?: string;
-  voting_method: VotingMethod;
+  description: string;
+  voting_method: VotingMethod | string;
+
   creator_telegram_id: number | null;
+
   created_at: string;
 
   results_visibility: ResultsVisibility;
