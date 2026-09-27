@@ -138,25 +138,36 @@ export async function getMyPolls(
               poll.id
             );
 
-        const { count: rankedCount } =
+        const { data: rankedVotes } =
           await supabase
             .from("ranked_votes")
             .select(
-              "telegram_user_id",
-              {
-                count: "exact",
-                head: true,
-              }
+              "telegram_user_id"
             )
             .eq(
               "poll_id",
               poll.id
             );
 
+        const rankedParticipants =
+          new Set<number>();
+
+        for (
+          const vote of
+            rankedVotes ?? []
+        ) {
+          rankedParticipants.add(
+            vote.telegram_user_id
+          );
+        }
+
+        const rankedCount =
+          rankedParticipants.size;
+
         const participantCount =
           Math.max(
             count ?? 0,
-            rankedCount ?? 0
+            rankedCount
           );
 
         return {
@@ -385,8 +396,8 @@ export async function getVoteCounts(
 
   for (const vote of data ?? []) {
     counts[vote.option_id] =
-      (counts[vote.option_id] ??
-        0) + 1;
+      (counts[vote.option_id] ?? 0) +
+      1;
   }
 
   return counts;
@@ -429,8 +440,8 @@ export async function getRankedResults(
       vote.rank;
 
     scores[vote.option_id] =
-      (scores[vote.option_id] ??
-        0) + score;
+      (scores[vote.option_id] ?? 0) +
+      score;
   }
 
   return {
