@@ -10,6 +10,7 @@ import RankedPollScreen from "./components/RankedPollScreen";
 import MyPolls from "./components/MyPolls";
 
 import {
+  getTelegramUserId,
   getTelegramUserName,
   getStartParam,
   initTelegram,
@@ -61,30 +62,29 @@ export default function App() {
     useState(false);
 
   const [voteCounts, setVoteCounts] =
-    useState<Record<string, number>>(
-      {}
-    );
+    useState<Record<string, number>>({});
+
+  const [participantCount, setParticipantCount] =
+    useState(0);
 
   const [rankedScores, setRankedScores] =
-    useState<Record<string, number>>(
-      {}
-    );
+    useState<Record<string, number>>({});
 
-  const [
-    rankedParticipantCount,
-    setRankedParticipantCount,
-  ] = useState(0);
+  const [rankedParticipantCount, setRankedParticipantCount] =
+    useState(0);
 
   const [now, setNow] =
     useState(Date.now());
 
-  const [
-    authenticatedUserId,
-    setAuthenticatedUserId,
-  ] = useState<number | null>(null);
+  const [authenticatedUserId, setAuthenticatedUserId] =
+    useState<number | null>(null);
 
   const telegramName =
     getTelegramUserName();
+
+  const telegramUserId =
+    authenticatedUserId ??
+    getTelegramUserId();
 
   useEffect(() => {
     async function startApp() {
@@ -94,9 +94,7 @@ export default function App() {
         const user =
           await authenticateTelegram();
 
-        setAuthenticatedUserId(
-          user.id
-        );
+        setAuthenticatedUserId(user.id);
 
         const startParam =
           getStartParam();
@@ -143,40 +141,31 @@ export default function App() {
         await getPoll(pollId);
 
       const loadedOptions =
-        await getPollOptions(
-          pollId
-        );
+        await getPollOptions(pollId);
 
       setPoll(loadedPoll);
-      setOptions(
-        loadedOptions
-      );
+      setOptions(loadedOptions);
 
       const userId =
         userIdOverride ??
-        authenticatedUserId;
+        authenticatedUserId ??
+        getTelegramUserId();
 
       if (userId !== null) {
-        setVoted(
+        const userVoted =
           await hasUserVoted(
             pollId,
             userId,
             loadedPoll.voting_method
-          )
-        );
+          );
+
+        setVoted(userVoted);
       } else {
         setVoted(false);
       }
 
-      setVoteCounts({});
-      setRankedScores({});
-      setRankedParticipantCount(
-        0
-      );
-
       if (
-        loadedPoll.voting_method ===
-        "ranked"
+        loadedPoll.voting_method === "ranked"
       ) {
         const results =
           await getRankedResults(
@@ -184,18 +173,17 @@ export default function App() {
             loadedOptions.length
           );
 
-        setRankedScores(
-          results.scores
-        );
-
+        setRankedScores(results.scores);
         setRankedParticipantCount(
           results.participantCount
         );
       } else {
-        setVoteCounts(
-          await getVoteCounts(
-            pollId
-          )
+        const results =
+          await getVoteCounts(pollId);
+
+        setVoteCounts(results.counts);
+        setParticipantCount(
+          results.participantCount
         );
       }
 
@@ -207,7 +195,7 @@ export default function App() {
       );
 
       alert(
-        "Не удалось открыть голосование."
+        "Не удалось открыть голосование. Возможно, оно было удалено."
       );
     } finally {
       setLoading(false);
@@ -226,6 +214,13 @@ export default function App() {
     shuffleOptions: boolean,
     showParticipantCount: boolean
   ) {
+    if (authenticatedUserId === null) {
+      alert(
+        "Пользователь Telegram не подтверждён."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -245,8 +240,7 @@ export default function App() {
 
       await openPoll(
         newPoll.id,
-        authenticatedUserId ??
-          undefined
+        authenticatedUserId
       );
     } catch (error) {
       console.error(
@@ -265,7 +259,10 @@ export default function App() {
   async function handleVote(
     optionIds: string[]
   ) {
-    if (!poll) {
+    if (
+      !poll ||
+      authenticatedUserId === null
+    ) {
       return;
     }
 
@@ -279,10 +276,14 @@ export default function App() {
 
       setVoted(true);
 
-      setVoteCounts(
+      const results =
         await getVoteCounts(
           poll.id
-        )
+        );
+
+      setVoteCounts(results.counts);
+      setParticipantCount(
+        results.participantCount
       );
     } catch (error) {
       console.error(
@@ -292,27 +293,10 @@ export default function App() {
 
       if (
         error instanceof Error &&
-        error.message ===
-          "ALREADY_VOTED"
+        error.message === "ALREADY_VOTED"
       ) {
         alert(
-          "Вы уже голосовали в этом голосовании."
-        );
-      } else if (
-        error instanceof Error &&
-        error.message ===
-          "TOO_MANY_CHOICES"
-      ) {
-        alert(
-          `Можно выбрать максимум ${poll.max_choices} вариантов.`
-        );
-      } else if (
-        error instanceof Error &&
-        error.message ===
-          "POLL_EXPIRED"
-      ) {
-        alert(
-          "Это голосование уже завершено."
+          "Повторное голосование отключено для этого опроса."
         );
       } else {
         alert(
@@ -327,7 +311,10 @@ export default function App() {
   async function handleRankedVote(
     rankedOptionIds: string[]
   ) {
-    if (!poll) {
+    if (
+      !poll ||
+      authenticatedUserId === null
+    ) {
       return;
     }
 
@@ -362,11 +349,10 @@ export default function App() {
 
       if (
         error instanceof Error &&
-        error.message ===
-          "ALREADY_VOTED"
+        error.message === "ALREADY_VOTED"
       ) {
         alert(
-          "Вы уже голосовали в этом голосовании."
+          "Повторное голосование отключено для этого опроса."
         );
       } else {
         alert(
@@ -379,13 +365,22 @@ export default function App() {
   }
 
   async function loadMyPolls() {
+    if (authenticatedUserId === null) {
+      alert(
+        "Пользователь Telegram не подтверждён."
+      );
+      return;
+    }
+
     setLoading(true);
 
     try {
-      setMyPolls(
-        await getMyPolls()
-      );
+      const polls =
+        await getMyPolls(
+          authenticatedUserId
+        );
 
+      setMyPolls(polls);
       setScreen("myPolls");
     } catch (error) {
       console.error(
@@ -404,9 +399,13 @@ export default function App() {
   async function handleDeletePoll(
     pollId: string
   ) {
+    if (authenticatedUserId === null) {
+      return;
+    }
+
     const confirmed =
       window.confirm(
-        "Удалить это голосование?"
+        "Удалить это голосование?\n\nВсе голоса и результаты тоже будут удалены."
       );
 
     if (!confirmed) {
@@ -416,12 +415,12 @@ export default function App() {
     setLoading(true);
 
     try {
-      await deletePoll(
-        pollId
-      );
+      await deletePoll(pollId);
 
-      setMyPolls(
-        await getMyPolls()
+      setMyPolls((current) =>
+        current.filter(
+          (item) => item.id !== pollId
+        )
       );
     } catch (error) {
       console.error(
@@ -437,18 +436,6 @@ export default function App() {
     }
   }
 
-  function goHome() {
-    setScreen("home");
-    setPoll(null);
-    setOptions([]);
-    setVoted(false);
-    setVoteCounts({});
-    setRankedScores({});
-    setRankedParticipantCount(
-      0
-    );
-  }
-
   function handleShare() {
     if (!poll) {
       return;
@@ -460,29 +447,34 @@ export default function App() {
     );
   }
 
+  function goHome() {
+    setScreen("home");
+    setPoll(null);
+    setOptions([]);
+    setVoted(false);
+    setVoteCounts({});
+    setParticipantCount(0);
+    setRankedScores({});
+    setRankedParticipantCount(0);
+  }
+
   return (
     <>
       {screen === "home" && (
         <HomeScreen
-          telegramName={
-            telegramName
-          }
+          telegramName={telegramName}
           loading={loading}
           onCreate={() =>
             setScreen("create")
           }
-          onMyPolls={
-            loadMyPolls
-          }
+          onMyPolls={loadMyPolls}
         />
       )}
 
       {screen === "create" && (
         <CreatePoll
           loading={loading}
-          onCreate={
-            handleCreate
-          }
+          onCreate={handleCreate}
           onBack={goHome}
         />
       )}
@@ -490,92 +482,57 @@ export default function App() {
       {screen === "myPolls" && (
         <MyPolls
           polls={myPolls}
+          now={now}
           loading={loading}
           onOpen={openPoll}
-          onDelete={
-            handleDeletePoll
-          }
+          onDelete={handleDeletePoll}
           onBack={goHome}
         />
       )}
 
       {screen === "poll" &&
         poll &&
-        poll.voting_method ===
-          "ranked" && (
-          <RankedPollScreen
+        poll.voting_method !== "ranked" && (
+          <PollScreen
             poll={poll}
             options={options}
             voted={voted}
             loading={loading}
-            rankedScores={
-              rankedScores
-            }
+            voteCounts={voteCounts}
             participantCount={
-              rankedParticipantCount
+              participantCount
             }
             now={now}
-            onVote={
-              handleRankedVote
-            }
-            onShare={
-              handleShare
-            }
+            onVote={handleVote}
+            onShare={handleShare}
             onBack={goHome}
           />
         )}
 
       {screen === "poll" &&
         poll &&
-        poll.voting_method !==
-          "ranked" && (
-          <PollScreen
+        poll.voting_method === "ranked" && (
+          <RankedPollScreen
             poll={poll}
             options={options}
             voted={voted}
             loading={loading}
-            voteCounts={
-              voteCounts
+            rankedScores={rankedScores}
+            participantCount={
+              rankedParticipantCount
             }
             now={now}
-            onVote={
-              handleVote
-            }
-            onShare={
-              handleShare
-            }
+            onVote={handleRankedVote}
+            onShare={handleShare}
             onBack={goHome}
           />
         )}
 
       {loading && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            display: "flex",
-            alignItems:
-              "center",
-            justifyContent:
-              "center",
-            pointerEvents:
-              "none",
-            zIndex: 999,
-          }}
-        >
-          <div
-            style={{
-              padding:
-                "10px 16px",
-              borderRadius: 12,
-              background:
-                "rgba(0,0,0,0.08)",
-              backdropFilter:
-                "blur(8px)",
-              fontSize: 14,
-            }}
-          >
-            Загрузка…
+        <div className="global-loader">
+          <div className="loader-card">
+            <span className="loader-dot" />
+            <span>Загрузка…</span>
           </div>
         </div>
       )}
