@@ -6,7 +6,10 @@ export type Screen =
 
 export type VotingMethod =
   | "plurality"
-  | "ranked";
+  | "multiple"
+  | "ranked"
+  | "yes_no"
+  | "rating";
 
 export type ResultsVisibility =
   | "always"
@@ -22,15 +25,22 @@ export type PollOption = {
 export type Poll = {
   id: string;
   title: string;
-  voting_method: string;
+  description?: string;
+  voting_method: VotingMethod;
   creator_telegram_id: number | null;
   created_at: string;
 
-  results_visibility?: ResultsVisibility;
+  results_visibility: ResultsVisibility;
 
-  ends_at?: string | null;
+  ends_at: string | null;
 
-  allow_revoting?: boolean;
+  allow_revoting: boolean;
+
+  max_choices: number;
+
+  shuffle_options: boolean;
+
+  show_participant_count: boolean;
 
   participant_count?: number;
 };
