@@ -4,9 +4,9 @@ import { getTelegramInitData } from "./telegram";
 import type {
   Poll,
   PollOption,
-  ParliamentaryResult,
   ResultsVisibility,
   VotingMethod,
+  ParliamentaryResults,
 } from "../types/poll";
 
 async function callTelegramApi(
@@ -73,11 +73,12 @@ export async function createPoll(
 export async function getPoll(
   pollId: string
 ) {
-  const { data, error } = await supabase
-    .from("polls")
-    .select("*")
-    .eq("id", pollId)
-    .single();
+  const { data, error } =
+    await supabase
+      .from("polls")
+      .select("*")
+      .eq("id", pollId)
+      .single();
 
   if (error) {
     throw error;
@@ -89,13 +90,14 @@ export async function getPoll(
 export async function getPollOptions(
   pollId: string
 ) {
-  const { data, error } = await supabase
-    .from("poll_options")
-    .select("*")
-    .eq("poll_id", pollId)
-    .order("position", {
-      ascending: true,
-    });
+  const { data, error } =
+    await supabase
+      .from("poll_options")
+      .select("*")
+      .eq("poll_id", pollId)
+      .order("position", {
+        ascending: true,
+      });
 
   if (error) {
     throw error;
@@ -107,13 +109,17 @@ export async function getPollOptions(
 export async function getMyPolls(
   telegramUserId: number
 ) {
-  const { data, error } = await supabase
-    .from("polls")
-    .select("*")
-    .eq("creator_telegram_id", telegramUserId)
-    .order("created_at", {
-      ascending: false,
-    });
+  const { data, error } =
+    await supabase
+      .from("polls")
+      .select("*")
+      .eq(
+        "creator_telegram_id",
+        telegramUserId
+      )
+      .order("created_at", {
+        ascending: false,
+      });
 
   if (error) {
     throw error;
@@ -121,55 +127,75 @@ export async function getMyPolls(
 
   const polls = (data ?? []) as Poll[];
 
-  const pollsWithCounts = await Promise.all(
-    polls.map(async (poll) => {
-      const participants = new Set<number>();
+  const pollsWithCounts =
+    await Promise.all(
+      polls.map(async (poll) => {
+        const participants =
+          new Set<number>();
 
-      const { data: votes } = await supabase
-        .from("votes")
-        .select("telegram_user_id")
-        .eq("poll_id", poll.id);
+        const { data: votes } =
+          await supabase
+            .from("votes")
+            .select("telegram_user_id")
+            .eq(
+              "poll_id",
+              poll.id
+            );
 
-      for (const vote of votes ?? []) {
-        participants.add(
-          vote.telegram_user_id
-        );
-      }
+        for (
+          const vote of votes ?? []
+        ) {
+          participants.add(
+            vote.telegram_user_id
+          );
+        }
 
-      const { data: rankedVotes } =
-        await supabase
+        const {
+          data: rankedVotes,
+        } = await supabase
           .from("ranked_votes")
           .select("telegram_user_id")
-          .eq("poll_id", poll.id);
+          .eq(
+            "poll_id",
+            poll.id
+          );
 
-      for (const vote of rankedVotes ?? []) {
-        participants.add(
-          vote.telegram_user_id
-        );
-      }
+        for (
+          const vote of rankedVotes ?? []
+        ) {
+          participants.add(
+            vote.telegram_user_id
+          );
+        }
 
-      const { data: parliamentaryVotes } =
-        await supabase
-          .from("parliamentary_votes")
+        const {
+          data: parliamentaryVotes,
+        } = await supabase
+          .from(
+            "parliamentary_votes"
+          )
           .select("telegram_user_id")
-          .eq("poll_id", poll.id);
+          .eq(
+            "poll_id",
+            poll.id
+          );
 
-      for (
-        const vote of
-          parliamentaryVotes ?? []
-      ) {
-        participants.add(
-          vote.telegram_user_id
-        );
-      }
+        for (
+          const vote of
+            parliamentaryVotes ?? []
+        ) {
+          participants.add(
+            vote.telegram_user_id
+          );
+        }
 
-      return {
-        ...poll,
-        participant_count:
-          participants.size,
-      };
-    })
-  );
+        return {
+          ...poll,
+          participant_count:
+            participants.size,
+        };
+      })
+    );
 
   return pollsWithCounts;
 }
@@ -179,106 +205,57 @@ export async function hasUserVoted(
   telegramUserId: number,
   votingMethod: string
 ) {
-  if (
-    votingMethod ===
-    "parliamentary"
-  ) {
-    const { data, error } =
-      await supabase
-        .from("parliamentary_votes")
-        .select("id")
-        .eq("poll_id", pollId)
-        .eq(
-          "telegram_user_id",
-          telegramUserId
-        )
-        .limit(1);
+  void telegramUserId;
+  void votingMethod;
 
-    if (error) {
-      throw error;
-    }
-
-    return (
-      (data?.length ?? 0) > 0
+  const data =
+    await callTelegramApi(
+      "has_voted",
+      {
+        pollId,
+      }
     );
-  }
 
-  if (
-    votingMethod ===
-    "ranked"
-  ) {
-    const { data, error } =
-      await supabase
-        .from("ranked_votes")
-        .select("id")
-        .eq("poll_id", pollId)
-        .eq(
-          "telegram_user_id",
-          telegramUserId
-        )
-        .limit(1);
-
-    if (error) {
-      throw error;
-    }
-
-    return (
-      (data?.length ?? 0) > 0
-    );
-  }
-
-  const { data, error } =
-    await supabase
-      .from("votes")
-      .select("id")
-      .eq("poll_id", pollId)
-      .eq(
-        "telegram_user_id",
-        telegramUserId
-      )
-      .limit(1);
-
-  if (error) {
-    throw error;
-  }
-
-  return (
-    (data?.length ?? 0) > 0
-  );
+  return data.voted === true;
 }
 
 export async function vote(
   pollId: string,
   optionIds: string[]
 ) {
-  return callTelegramApi("vote", {
-    pollId,
-    optionIds,
-  });
+  return callTelegramApi(
+    "vote",
+    {
+      pollId,
+      optionIds,
+    }
+  );
 }
 
 export async function rankedVote(
   pollId: string,
   rankedOptionIds: string[]
 ) {
-  return callTelegramApi("ranked_vote", {
-    pollId,
-    rankedOptionIds,
-  });
+  return callTelegramApi(
+    "ranked_vote",
+    {
+      pollId,
+      rankedOptionIds,
+    }
+  );
 }
 
 export async function parliamentaryVote(
   pollId: string,
-  votes: {
-    optionId: string;
-    stance: "for" | "against";
-  }[]
+  forOptionIds: string[],
+  againstOptionIds: string[]
 ) {
   return callTelegramApi(
     "parliamentary_vote",
     {
       pollId,
-      votes,
+      forOptionIds,
+      againstOptionIds,
     }
   );
 }
@@ -298,11 +275,17 @@ export async function getVoteCounts(
     throw error;
   }
 
-  const counts: Record<string, number> = {};
+  const counts: Record<
+    string,
+    number
+  > = {};
+
   const participants =
     new Set<number>();
 
-  for (const vote of data ?? []) {
+  for (
+    const vote of data ?? []
+  ) {
     counts[vote.option_id] =
       (counts[vote.option_id] ?? 0) +
       1;
@@ -335,13 +318,17 @@ export async function getRankedResults(
     throw error;
   }
 
-  const scores: Record<string, number> =
-    {};
+  const scores: Record<
+    string,
+    number
+  > = {};
 
   const participants =
     new Set<number>();
 
-  for (const vote of data ?? []) {
+  for (
+    const vote of data ?? []
+  ) {
     participants.add(
       vote.telegram_user_id
     );
@@ -363,7 +350,7 @@ export async function getRankedResults(
 
 export async function getParliamentaryResults(
   pollId: string
-): Promise<ParliamentaryResult> {
+): Promise<ParliamentaryResults> {
   const data =
     await callTelegramApi(
       "get_parliamentary_results",
@@ -373,12 +360,17 @@ export async function getParliamentaryResults(
     );
 
   return {
+    seats: Number(
+      data.seats ?? 0
+    ),
+
     allocation:
-      Array.isArray(data.allocation)
-        ? data.allocation
-        : [],
-    counts:
-      data.counts ?? {},
+      (data.allocation ?? []) as string[],
+
+    seatCounts:
+      (data.seatCounts ??
+        {}) as Record<string, number>,
+
     participantCount:
       Number(
         data.participantCount ?? 0
