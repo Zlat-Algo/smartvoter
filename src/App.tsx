@@ -7,6 +7,7 @@ import HomeScreen from "./components/HomeScreen";
 import CreatePoll from "./components/CreatePoll";
 import PollScreen from "./components/PollScreen";
 import RankedPollScreen from "./components/RankedPollScreen";
+import ParliamentaryPollScreen from "./components/ParliamentaryPollScreen";
 import MyPolls from "./components/MyPolls";
 
 import {
@@ -29,8 +30,10 @@ import {
   hasUserVoted,
   vote,
   rankedVote,
+  parliamentaryVote,
   getVoteCounts,
   getRankedResults,
+  getParliamentaryResults,
   deletePoll,
 } from "./lib/polls";
 
@@ -62,15 +65,30 @@ export default function App() {
     useState(false);
 
   const [voteCounts, setVoteCounts] =
-    useState<Record<string, number>>({});
+    useState<Record<string, number>>(
+      {}
+    );
 
   const [participantCount, setParticipantCount] =
     useState(0);
 
   const [rankedScores, setRankedScores] =
-    useState<Record<string, number>>({});
+    useState<Record<string, number>>(
+      {}
+    );
 
   const [rankedParticipantCount, setRankedParticipantCount] =
+    useState(0);
+
+  const [parliamentaryAllocation, setParliamentaryAllocation] =
+    useState<string[]>([]);
+
+  const [parliamentaryCounts, setParliamentaryCounts] =
+    useState<Record<string, number>>(
+      {}
+    );
+
+  const [parliamentaryParticipantCount, setParliamentaryParticipantCount] =
     useState(0);
 
   const [now, setNow] =
@@ -82,10 +100,6 @@ export default function App() {
   const telegramName =
     getTelegramUserName();
 
-  const telegramUserId =
-    authenticatedUserId ??
-    getTelegramUserId();
-
   useEffect(() => {
     async function startApp() {
       initTelegram();
@@ -94,7 +108,9 @@ export default function App() {
         const user =
           await authenticateTelegram();
 
-        setAuthenticatedUserId(user.id);
+        setAuthenticatedUserId(
+          user.id
+        );
 
         const startParam =
           getStartParam();
@@ -144,14 +160,18 @@ export default function App() {
         await getPollOptions(pollId);
 
       setPoll(loadedPoll);
-      setOptions(loadedOptions);
+      setOptions(
+        loadedOptions
+      );
 
       const userId =
         userIdOverride ??
         authenticatedUserId ??
         getTelegramUserId();
 
-      if (userId !== null) {
+      if (
+        userId !== null
+      ) {
         const userVoted =
           await hasUserVoted(
             pollId,
@@ -159,13 +179,16 @@ export default function App() {
             loadedPoll.voting_method
           );
 
-        setVoted(userVoted);
+        setVoted(
+          userVoted
+        );
       } else {
         setVoted(false);
       }
 
       if (
-        loadedPoll.voting_method === "ranked"
+        loadedPoll.voting_method ===
+        "ranked"
       ) {
         const results =
           await getRankedResults(
@@ -173,15 +196,43 @@ export default function App() {
             loadedOptions.length
           );
 
-        setRankedScores(results.scores);
+        setRankedScores(
+          results.scores
+        );
+
         setRankedParticipantCount(
+          results.participantCount
+        );
+      } else if (
+        loadedPoll.voting_method ===
+        "parliamentary"
+      ) {
+        const results =
+          await getParliamentaryResults(
+            pollId
+          );
+
+        setParliamentaryAllocation(
+          results.allocation
+        );
+
+        setParliamentaryCounts(
+          results.counts
+        );
+
+        setParliamentaryParticipantCount(
           results.participantCount
         );
       } else {
         const results =
-          await getVoteCounts(pollId);
+          await getVoteCounts(
+            pollId
+          );
 
-        setVoteCounts(results.counts);
+        setVoteCounts(
+          results.counts
+        );
+
         setParticipantCount(
           results.participantCount
         );
@@ -212,9 +263,13 @@ export default function App() {
     allowRevoting: boolean,
     maxChoices: number,
     shuffleOptions: boolean,
-    showParticipantCount: boolean
+    showParticipantCount: boolean,
+    parliamentarySeats: number | null
   ) {
-    if (authenticatedUserId === null) {
+    if (
+      authenticatedUserId ===
+      null
+    ) {
       alert(
         "Пользователь Telegram не подтверждён."
       );
@@ -235,7 +290,8 @@ export default function App() {
           allowRevoting,
           maxChoices,
           shuffleOptions,
-          showParticipantCount
+          showParticipantCount,
+          parliamentarySeats
         );
 
       await openPoll(
@@ -261,7 +317,8 @@ export default function App() {
   ) {
     if (
       !poll ||
-      authenticatedUserId === null
+      authenticatedUserId ===
+        null
     ) {
       return;
     }
@@ -281,7 +338,10 @@ export default function App() {
           poll.id
         );
 
-      setVoteCounts(results.counts);
+      setVoteCounts(
+        results.counts
+      );
+
       setParticipantCount(
         results.participantCount
       );
@@ -293,7 +353,8 @@ export default function App() {
 
       if (
         error instanceof Error &&
-        error.message === "ALREADY_VOTED"
+        error.message ===
+          "ALREADY_VOTED"
       ) {
         alert(
           "Повторное голосование отключено для этого опроса."
@@ -313,7 +374,8 @@ export default function App() {
   ) {
     if (
       !poll ||
-      authenticatedUserId === null
+      authenticatedUserId ===
+        null
     ) {
       return;
     }
@@ -349,7 +411,74 @@ export default function App() {
 
       if (
         error instanceof Error &&
-        error.message === "ALREADY_VOTED"
+        error.message ===
+          "ALREADY_VOTED"
+      ) {
+        alert(
+          "Повторное голосование отключено для этого опроса."
+        );
+      } else {
+        alert(
+          "Не удалось сохранить голос."
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleParliamentaryVote(
+    votes: {
+      optionId: string;
+      stance:
+        | "for"
+        | "against";
+    }[]
+  ) {
+    if (
+      !poll ||
+      authenticatedUserId ===
+        null
+    ) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await parliamentaryVote(
+        poll.id,
+        votes
+      );
+
+      setVoted(true);
+
+      const results =
+        await getParliamentaryResults(
+          poll.id
+        );
+
+      setParliamentaryAllocation(
+        results.allocation
+      );
+
+      setParliamentaryCounts(
+        results.counts
+      );
+
+      setParliamentaryParticipantCount(
+        results.participantCount
+      );
+    } catch (error) {
+      console.error(
+        "Failed to save parliamentary vote:",
+        error
+      );
+
+      if (
+        error instanceof Error &&
+        error.message ===
+          "ALREADY_VOTED"
       ) {
         alert(
           "Повторное голосование отключено для этого опроса."
@@ -365,7 +494,10 @@ export default function App() {
   }
 
   async function loadMyPolls() {
-    if (authenticatedUserId === null) {
+    if (
+      authenticatedUserId ===
+      null
+    ) {
       alert(
         "Пользователь Telegram не подтверждён."
       );
@@ -380,8 +512,13 @@ export default function App() {
           authenticatedUserId
         );
 
-      setMyPolls(polls);
-      setScreen("myPolls");
+      setMyPolls(
+        polls
+      );
+
+      setScreen(
+        "myPolls"
+      );
     } catch (error) {
       console.error(
         "Failed to load polls:",
@@ -399,7 +536,10 @@ export default function App() {
   async function handleDeletePoll(
     pollId: string
   ) {
-    if (authenticatedUserId === null) {
+    if (
+      authenticatedUserId ===
+      null
+    ) {
       return;
     }
 
@@ -415,12 +555,17 @@ export default function App() {
     setLoading(true);
 
     try {
-      await deletePoll(pollId);
+      await deletePoll(
+        pollId
+      );
 
-      setMyPolls((current) =>
-        current.filter(
-          (item) => item.id !== pollId
-        )
+      setMyPolls(
+        (current) =>
+          current.filter(
+            (item) =>
+              item.id !==
+              pollId
+          )
       );
     } catch (error) {
       console.error(
@@ -455,76 +600,180 @@ export default function App() {
     setVoteCounts({});
     setParticipantCount(0);
     setRankedScores({});
-    setRankedParticipantCount(0);
+    setRankedParticipantCount(
+      0
+    );
+    setParliamentaryAllocation(
+      []
+    );
+    setParliamentaryCounts(
+      {}
+    );
+    setParliamentaryParticipantCount(
+      0
+    );
   }
 
   return (
     <>
       {screen === "home" && (
         <HomeScreen
-          telegramName={telegramName}
-          loading={loading}
-          onCreate={() =>
-            setScreen("create")
+          telegramName={
+            telegramName
           }
-          onMyPolls={loadMyPolls}
+          loading={
+            loading
+          }
+          onCreate={() =>
+            setScreen(
+              "create"
+            )
+          }
+          onMyPolls={
+            loadMyPolls
+          }
         />
       )}
 
       {screen === "create" && (
         <CreatePoll
-          loading={loading}
-          onCreate={handleCreate}
-          onBack={goHome}
+          loading={
+            loading
+          }
+          onCreate={
+            handleCreate
+          }
+          onBack={
+            goHome
+          }
         />
       )}
 
       {screen === "myPolls" && (
         <MyPolls
-          polls={myPolls}
+          polls={
+            myPolls
+          }
           now={now}
-          loading={loading}
-          onOpen={openPoll}
-          onDelete={handleDeletePoll}
-          onBack={goHome}
+          loading={
+            loading
+          }
+          onOpen={
+            openPoll
+          }
+          onDelete={
+            handleDeletePoll
+          }
+          onBack={
+            goHome
+          }
         />
       )}
 
       {screen === "poll" &&
         poll &&
-        poll.voting_method !== "ranked" && (
+        poll.voting_method !==
+          "ranked" &&
+        poll.voting_method !==
+          "parliamentary" && (
           <PollScreen
             poll={poll}
-            options={options}
-            voted={voted}
-            loading={loading}
-            voteCounts={voteCounts}
+            options={
+              options
+            }
+            voted={
+              voted
+            }
+            loading={
+              loading
+            }
+            voteCounts={
+              voteCounts
+            }
             participantCount={
               participantCount
             }
             now={now}
-            onVote={handleVote}
-            onShare={handleShare}
-            onBack={goHome}
+            onVote={
+              handleVote
+            }
+            onShare={
+              handleShare
+            }
+            onBack={
+              goHome
+            }
           />
         )}
 
       {screen === "poll" &&
         poll &&
-        poll.voting_method === "ranked" && (
+        poll.voting_method ===
+          "ranked" && (
           <RankedPollScreen
             poll={poll}
-            options={options}
-            voted={voted}
-            loading={loading}
-            rankedScores={rankedScores}
+            options={
+              options
+            }
+            voted={
+              voted
+            }
+            loading={
+              loading
+            }
+            rankedScores={
+              rankedScores
+            }
             participantCount={
               rankedParticipantCount
             }
             now={now}
-            onVote={handleRankedVote}
-            onShare={handleShare}
-            onBack={goHome}
+            onVote={
+              handleRankedVote
+            }
+            onShare={
+              handleShare
+            }
+            onBack={
+              goHome
+            }
+          />
+        )}
+
+      {screen === "poll" &&
+        poll &&
+        poll.voting_method ===
+          "parliamentary" && (
+          <ParliamentaryPollScreen
+            poll={poll}
+            options={
+              options
+            }
+            voted={
+              voted
+            }
+            loading={
+              loading
+            }
+            allocation={
+              parliamentaryAllocation
+            }
+            counts={
+              parliamentaryCounts
+            }
+            participantCount={
+              parliamentaryParticipantCount
+            }
+            now={now}
+            onVote={
+              handleParliamentaryVote
+            }
+            onShare={
+              handleShare
+            }
+            onBack={
+              goHome
+            }
           />
         )}
 
@@ -532,7 +781,9 @@ export default function App() {
         <div className="global-loader">
           <div className="loader-card">
             <span className="loader-dot" />
-            <span>Загрузка…</span>
+            <span>
+              Загрузка…
+            </span>
           </div>
         </div>
       )}
