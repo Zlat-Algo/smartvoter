@@ -1,14 +1,15 @@
-import { useState } from "react";
+import {
+  useMemo,
+  useState,
+} from "react";
 
 import type {
-  VotingMethod,
   ResultsVisibility,
+  VotingMethod,
 } from "../types/poll";
 
 type Props = {
   loading: boolean;
-
-  onBack: () => void;
 
   onCreate: (
     title: string,
@@ -21,614 +22,759 @@ type Props = {
     maxChoices: number,
     shuffleOptions: boolean,
     showParticipantCount: boolean
-  ) => Promise<void>;
+  ) => void;
+
+  onBack: () => void;
 };
 
-const titleExamples = [
-  "Куда пойдём сегодня?",
-  "Какой вариант выбираем?",
-  "Что будем делать дальше?",
-  "Какой фильм посмотреть?",
-  "Где устроим встречу?",
-  "Как лучше провести выходные?",
-];
-
-const typeInfo: {
-  type: VotingMethod;
+const methodInfo: {
+  id: VotingMethod;
   icon: string;
   title: string;
   description: string;
 }[] = [
   {
-    type: "plurality",
-    icon: "🗳️",
+    id: "plurality",
+    icon: "☝️",
     title: "Один вариант",
-    description:
-      "Каждый выбирает только один ответ.",
+    description: "Выберите один ответ",
   },
   {
-    type: "multiple",
+    id: "multiple",
     icon: "☑️",
     title: "Несколько вариантов",
-    description:
-      "Можно выбрать несколько ответов.",
+    description: "Можно выбрать несколько",
   },
   {
-    type: "ranked",
+    id: "ranked",
     icon: "🏆",
-    title: "Ранжирование",
-    description:
-      "Расставьте варианты от лучшего к худшему.",
+    title: "Рейтинг",
+    description: "Расставьте варианты по местам",
   },
   {
-    type: "yes_no",
+    id: "yes_no",
     icon: "👍",
     title: "Да / Нет",
-    description:
-      "Быстрое голосование из двух вариантов.",
+    description: "Быстрый вопрос",
   },
   {
-    type: "rating",
+    id: "rating",
     icon: "⭐",
     title: "Оценка 1–5",
-    description:
-      "Оцените вопрос по пятибалльной шкале.",
+    description: "Оцените что-нибудь",
+  },
+];
+
+const durationOptions = [
+  {
+    value: "none",
+    label: "Без ограничения",
+    ms: null,
+  },
+  {
+    value: "1h",
+    label: "1 час",
+    ms: 60 * 60 * 1000,
+  },
+  {
+    value: "6h",
+    label: "6 часов",
+    ms: 6 * 60 * 60 * 1000,
+  },
+  {
+    value: "12h",
+    label: "12 часов",
+    ms: 12 * 60 * 60 * 1000,
+  },
+  {
+    value: "1d",
+    label: "1 день",
+    ms: 24 * 60 * 60 * 1000,
+  },
+  {
+    value: "3d",
+    label: "3 дня",
+    ms: 3 * 24 * 60 * 60 * 1000,
+  },
+  {
+    value: "7d",
+    label: "7 дней",
+    ms: 7 * 24 * 60 * 60 * 1000,
   },
 ];
 
 export default function CreatePoll({
   loading,
-  onBack,
   onCreate,
+  onBack,
 }: Props) {
   const [title, setTitle] =
     useState("");
 
-  const [
-    description,
-    setDescription,
-  ] = useState("");
-
-  const [options, setOptions] =
-    useState<string[]>([""]);
+  const [description, setDescription] =
+    useState("");
 
   const [votingMethod, setVotingMethod] =
-    useState<VotingMethod>(
-      "plurality"
-    );
+    useState<VotingMethod>("plurality");
 
-  const [
-    resultsVisibility,
-    setResultsVisibility,
-  ] = useState<ResultsVisibility>(
-    "always"
-  );
+  const [options, setOptions] =
+    useState<string[]>([
+      "",
+      "",
+    ]);
+
+  const [resultsVisibility, setResultsVisibility] =
+    useState<ResultsVisibility>("always");
 
   const [duration, setDuration] =
     useState("none");
 
-  const [
-    allowRevoting,
-    setAllowRevoting,
-  ] = useState(true);
+  const [allowRevoting, setAllowRevoting] =
+    useState(true);
 
-  const [
-    maxChoices,
-    setMaxChoices,
-  ] = useState(2);
+  const [maxChoices, setMaxChoices] =
+    useState(1);
 
-  const [
-    shuffleOptions,
-    setShuffleOptions,
-  ] = useState(false);
+  const [shuffleOptions, setShuffleOptions] =
+    useState(false);
 
-  const [
-    showParticipantCount,
-    setShowParticipantCount,
-  ] = useState(true);
+  const [showParticipantCount, setShowParticipantCount] =
+    useState(true);
 
-  const randomExample =
-    titleExamples[
-      Math.floor(
-        Math.random() *
-          titleExamples.length
-      )
-    ];
+  const activeMethod =
+    methodInfo.find(
+      (method) =>
+        method.id === votingMethod
+    );
 
-  const updateOption = (
+  const needsCustomOptions =
+    votingMethod !== "yes_no" &&
+    votingMethod !== "rating";
+
+  const minOptions =
+    votingMethod === "ranked"
+      ? 2
+      : 1;
+
+  const validOptions = useMemo(
+    () =>
+      options
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [options]
+  );
+
+  function changeOption(
     index: number,
     value: string
-  ) => {
-    const copy = [...options];
+  ) {
+    setOptions((current) =>
+      current.map((item, itemIndex) =>
+        itemIndex === index
+          ? value
+          : item
+      )
+    );
+  }
 
-    copy[index] = value;
-
-    while (
-      copy.length > 1 &&
-      !copy[
-        copy.length - 1
-      ].trim()
-    ) {
-      copy.pop();
+  function addOption() {
+    if (options.length >= 20) {
+      return;
     }
 
-    if (
-      copy.length < 20 &&
-      copy[
-        copy.length - 1
-      ]?.trim()
-    ) {
-      copy.push("");
+    setOptions((current) => [
+      ...current,
+      "",
+    ]);
+  }
+
+  function removeOption(
+    index: number
+  ) {
+    if (options.length <= minOptions) {
+      return;
     }
 
-    setOptions(copy);
-  };
+    setOptions((current) =>
+      current.filter(
+        (_, itemIndex) =>
+          itemIndex !== index
+      )
+    );
+  }
 
-  const getEndsAt =
-    (): string | null => {
-      if (duration === "none") {
-        return null;
-      }
+  function selectMethod(
+    method: VotingMethod
+  ) {
+    setVotingMethod(method);
 
-      const end =
-        new Date();
+    if (method === "yes_no") {
+      setOptions([
+        "Да",
+        "Нет",
+      ]);
+    } else if (method === "rating") {
+      setOptions([
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+      ]);
+    } else {
+      setOptions((current) => {
+        if (current.length >= 2) {
+          return current;
+        }
 
-      end.setHours(
-        end.getHours() +
-          Number(duration)
-      );
-
-      return end.toISOString();
-    };
-
-  const getOptionsForType =
-    () => {
-      if (
-        votingMethod ===
-        "yes_no"
-      ) {
         return [
-          "Да",
-          "Нет",
+          ...current,
+          "",
         ];
-      }
+      });
+    }
 
-      if (
-        votingMethod ===
-        "rating"
-      ) {
-        return [
-          "1",
-          "2",
-          "3",
-          "4",
-          "5",
-        ];
-      }
+    if (method !== "multiple") {
+      setMaxChoices(1);
+    }
+  }
 
-      return options
-        .map((item) =>
-          item.trim()
-        )
-        .filter(Boolean);
-    };
+  function submit() {
+    const cleanTitle =
+      title.trim();
 
-  const submit = async () => {
-    if (!title.trim()) {
+    if (!cleanTitle) {
       alert(
-        "Введите название голосования."
+        "Введите вопрос или название голосования."
       );
       return;
     }
 
-    const validOptions =
-      getOptionsForType();
-
-    if (
-      validOptions.length <
-      1
-    ) {
+    if (cleanTitle.length > 200) {
       alert(
-        "Добавьте хотя бы один вариант."
+        "Название слишком длинное."
       );
       return;
     }
 
     if (
-      votingMethod ===
-        "multiple" &&
-      maxChoices >
-        validOptions.length
+      needsCustomOptions &&
+      validOptions.length < minOptions
     ) {
-      setMaxChoices(
-        validOptions.length
+      alert(
+        `Добавьте минимум ${minOptions} варианта.`
       );
+      return;
     }
 
-    await onCreate(
-      title.trim(),
+    if (
+      votingMethod === "multiple" &&
+      maxChoices > validOptions.length
+    ) {
+      alert(
+        "Максимальное количество вариантов не может быть больше количества вариантов ответа."
+      );
+      return;
+    }
+
+    const durationConfig =
+      durationOptions.find(
+        (item) =>
+          item.value === duration
+      );
+
+    const endsAt =
+      durationConfig?.ms
+        ? new Date(
+            Date.now() +
+              durationConfig.ms
+          ).toISOString()
+        : null;
+
+    const finalOptions =
+      needsCustomOptions
+        ? validOptions
+        : options;
+
+    onCreate(
+      cleanTitle,
       description.trim(),
-      validOptions,
+      finalOptions,
       votingMethod,
       resultsVisibility,
-      getEndsAt(),
+      endsAt,
       allowRevoting,
-      votingMethod ===
-        "multiple"
-        ? Math.min(
-            maxChoices,
-            validOptions.length
-          )
+      votingMethod === "multiple"
+        ? maxChoices
         : 1,
       shuffleOptions,
       showParticipantCount
     );
-  };
-
-  const customOptions =
-    votingMethod !==
-      "yes_no" &&
-    votingMethod !==
-      "rating";
+  }
 
   return (
-    <main className="app">
-      <button
-        className="back"
-        onClick={onBack}
-      >
-        ← Назад
-      </button>
+    <main className="page">
+      <div className="screen-header">
+        <button
+          className="back-button"
+          onClick={onBack}
+          disabled={loading}
+        >
+          ←
+        </button>
 
-      <h1>
-        Создать голосование
-      </h1>
+        <div className="screen-header-title">
+          Новое голосование
+        </div>
 
-      <label>
-        Название
-      </label>
-
-      <input
-        value={title}
-        onChange={(e) =>
-          setTitle(e.target.value)
-        }
-        placeholder={`Например: ${randomExample}`}
-      />
-
-      <label>
-        Описание
-      </label>
-
-      <textarea
-        value={description}
-        onChange={(e) =>
-          setDescription(
-            e.target.value
-          )
-        }
-        placeholder="Необязательно. Добавьте контекст или пояснение."
-        rows={3}
-      />
-
-      <label>
-        Тип голосования
-      </label>
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection:
-            "column",
-          gap: 10,
-          marginBottom: 18,
-        }}
-      >
-        {typeInfo.map(
-          (item) => (
-            <button
-              key={item.type}
-              type="button"
-              onClick={() =>
-                setVotingMethod(
-                  item.type
-                )
-              }
-              style={{
-                textAlign:
-                  "left",
-                padding:
-                  "14px 15px",
-                borderRadius:
-                  16,
-                border:
-                  votingMethod ===
-                  item.type
-                    ? "2px solid currentColor"
-                    : "1px solid rgba(128,128,128,0.22)",
-                background:
-                  votingMethod ===
-                  item.type
-                    ? "rgba(100,150,255,0.12)"
-                    : "rgba(128,128,128,0.07)",
-                color:
-                  "inherit",
-                cursor:
-                  "pointer",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 17,
-                  fontWeight: 700,
-                }}
-              >
-                {item.icon}{" "}
-                {item.title}
-              </div>
-
-              <div
-                style={{
-                  marginTop: 4,
-                  fontSize: 13,
-                  opacity: 0.72,
-                }}
-              >
-                {
-                  item.description
-                }
-              </div>
-            </button>
-          )
-        )}
+        <div className="header-spacer" />
       </div>
 
-      {customOptions && (
-        <>
-          <label>
-            Варианты
+      <section className="form-content">
+        <div className="form-intro">
+          <div className="form-icon">
+            🗳️
+          </div>
+
+          <div>
+            <h1>
+              Создадим голосование
+            </h1>
+
+            <p>
+              Настройте вопрос так,
+              как вам нужно.
+            </p>
+          </div>
+        </div>
+
+        <div className="form-section">
+          <label className="field-label">
+            Вопрос
           </label>
 
-          {options.map(
-            (
-              option,
-              index
-            ) => (
-              <input
-                key={index}
-                value={option}
-                onChange={(e) =>
-                  updateOption(
-                    index,
-                    e.target.value
-                  )
-                }
-                placeholder={`Вариант ${
-                  index + 1
-                }`}
-              />
-            )
-          )}
-        </>
-      )}
-
-      {votingMethod ===
-        "yes_no" && (
-        <div
-          style={{
-            padding: 14,
-            borderRadius: 14,
-            background:
-              "rgba(128,128,128,0.08)",
-            marginBottom: 18,
-          }}
-        >
-          👍 Да
-          <br />
-          👎 Нет
-        </div>
-      )}
-
-      {votingMethod ===
-        "rating" && (
-        <div
-          style={{
-            padding: 14,
-            borderRadius: 14,
-            background:
-              "rgba(128,128,128,0.08)",
-            marginBottom: 18,
-          }}
-        >
-          ⭐ 1 — очень плохо
-          <br />
-          ⭐⭐ 2 — плохо
-          <br />
-          ⭐⭐⭐ 3 — нормально
-          <br />
-          ⭐⭐⭐⭐ 4 — хорошо
-          <br />
-          ⭐⭐⭐⭐⭐ 5 — отлично
-        </div>
-      )}
-
-      {votingMethod ===
-        "multiple" && (
-        <>
-          <label>
-            Максимум вариантов
-          </label>
-
-          <select
-            value={maxChoices}
-            onChange={(e) =>
-              setMaxChoices(
-                Number(
-                  e.target.value
-                )
+          <input
+            className="text-input title-input"
+            value={title}
+            onChange={(event) =>
+              setTitle(
+                event.target.value
               )
             }
-          >
-            {Array.from(
-              {
-                length: Math.max(
-                  1,
-                  options.filter(
-                    (x) =>
-                      x.trim()
-                  ).length
-                ),
-              },
-              (_, index) =>
-                index + 1
-            ).map(
-              (value) => (
-                <option
-                  key={value}
-                  value={value}
+            placeholder="Например: Куда пойдём вечером?"
+            maxLength={200}
+          />
+
+          <textarea
+            className="text-input description-input"
+            value={description}
+            onChange={(event) =>
+              setDescription(
+                event.target.value
+              )
+            }
+            placeholder="Описание (необязательно)"
+            maxLength={1000}
+            rows={3}
+          />
+        </div>
+
+        <div className="form-section">
+          <div className="section-heading-row">
+            <div>
+              <div className="field-label">
+                Тип голосования
+              </div>
+
+              <div className="section-hint">
+                {activeMethod?.description}
+              </div>
+            </div>
+          </div>
+
+          <div className="method-grid">
+            {methodInfo.map(
+              (method) => (
+                <button
+                  type="button"
+                  key={method.id}
+                  className={`method-card ${
+                    votingMethod ===
+                    method.id
+                      ? "selected"
+                      : ""
+                  }`}
+                  onClick={() =>
+                    selectMethod(
+                      method.id
+                    )
+                  }
+                  disabled={loading}
                 >
-                  {value}
-                </option>
+                  <span className="method-icon">
+                    {method.icon}
+                  </span>
+
+                  <span className="method-title">
+                    {method.title}
+                  </span>
+
+                  <span className="method-description">
+                    {method.description}
+                  </span>
+                </button>
               )
             )}
-          </select>
-        </>
-      )}
+          </div>
+        </div>
 
-      {votingMethod !==
-        "rating" && (
+        {needsCustomOptions && (
+          <div className="form-section">
+            <div className="section-heading-row">
+              <div>
+                <div className="field-label">
+                  Варианты ответа
+                </div>
+
+                <div className="section-hint">
+                  {votingMethod ===
+                  "ranked"
+                    ? "Участник расставит их по порядку."
+                    : "Добавьте варианты, из которых будут выбирать."}
+                </div>
+              </div>
+
+              <span className="count-badge">
+                {validOptions.length}/20
+              </span>
+            </div>
+
+            <div className="options-editor">
+              {options.map(
+                (
+                  option,
+                  index
+                ) => (
+                  <div
+                    className="option-editor-row"
+                    key={index}
+                  >
+                    <span className="option-number">
+                      {index + 1}
+                    </span>
+
+                    <input
+                      className="text-input option-input"
+                      value={option}
+                      onChange={(
+                        event
+                      ) =>
+                        changeOption(
+                          index,
+                          event.target
+                            .value
+                        )
+                      }
+                      placeholder={`Вариант ${index + 1}`}
+                      maxLength={200}
+                      disabled={loading}
+                    />
+
+                    {options.length >
+                      minOptions && (
+                      <button
+                        type="button"
+                        className="remove-option"
+                        onClick={() =>
+                          removeOption(
+                            index
+                          )
+                        }
+                        disabled={
+                          loading
+                        }
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+
+            <button
+              type="button"
+              className="add-option-button"
+              onClick={addOption}
+              disabled={
+                loading ||
+                options.length >=
+                  20
+              }
+            >
+              ＋ Добавить вариант
+            </button>
+
+            {votingMethod ===
+              "multiple" && (
+              <div className="inline-setting">
+                <div>
+                  <strong>
+                    Максимум вариантов
+                  </strong>
+                  <span>
+                    Сколько ответов можно
+                    выбрать
+                  </span>
+                </div>
+
+                <select
+                  className="select-input small-select"
+                  value={maxChoices}
+                  onChange={(
+                    event
+                  ) =>
+                    setMaxChoices(
+                      Number(
+                        event.target
+                          .value
+                      )
+                    )
+                  }
+                  disabled={loading}
+                >
+                  {Array.from(
+                    {
+                      length: Math.max(
+                        1,
+                        validOptions.length
+                      ),
+                    },
+                    (_, index) => (
+                      <option
+                        key={
+                          index + 1
+                        }
+                        value={
+                          index + 1
+                        }
+                      >
+                        {index + 1}
+                      </option>
+                    )
+                  )}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!needsCustomOptions && (
+          <div className="preset-preview">
+            <div className="field-label">
+              Варианты
+            </div>
+
+            <div className="preset-options">
+              {options.map(
+                (option) => (
+                  <div
+                    className="preset-option"
+                    key={option}
+                  >
+                    {votingMethod ===
+                    "yes_no"
+                      ? option ===
+                        "Да"
+                        ? "👍"
+                        : "👎"
+                      : "⭐"}{" "}
+                    {option}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="form-section">
+          <div className="field-label">
+            Настройки
+          </div>
+
+          <div className="settings-card">
+            <div className="setting-row">
+              <div className="setting-copy">
+                <strong>
+                  Показывать результаты
+                </strong>
+
+                <span>
+                  Когда участник увидит
+                  результаты
+                </span>
+              </div>
+
+              <select
+                className="select-input"
+                value={
+                  resultsVisibility
+                }
+                onChange={(event) =>
+                  setResultsVisibility(
+                    event.target
+                      .value as ResultsVisibility
+                  )
+                }
+                disabled={loading}
+              >
+                <option value="always">
+                  Всегда
+                </option>
+
+                <option value="after_vote">
+                  После голосования
+                </option>
+
+                <option value="after_expiration">
+                  После окончания
+                </option>
+              </select>
+            </div>
+
+            <div className="setting-row">
+              <div className="setting-copy">
+                <strong>
+                  Длительность
+                </strong>
+
+                <span>
+                  Когда голосование закончится
+                </span>
+              </div>
+
+              <select
+                className="select-input"
+                value={duration}
+                onChange={(event) =>
+                  setDuration(
+                    event.target.value
+                  )
+                }
+                disabled={loading}
+              >
+                {durationOptions.map(
+                  (item) => (
+                    <option
+                      key={item.value}
+                      value={
+                        item.value
+                      }
+                    >
+                      {item.label}
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <label className="switch-row">
+              <span className="setting-copy">
+                <strong>
+                  Разрешить повторное голосование
+                </strong>
+
+                <span>
+                  Можно изменить свой ответ
+                </span>
+              </span>
+
+              <input
+                type="checkbox"
+                checked={
+                  allowRevoting
+                }
+                onChange={(event) =>
+                  setAllowRevoting(
+                    event.target
+                      .checked
+                  )
+                }
+                disabled={loading}
+              />
+
+              <span className="switch" />
+            </label>
+
+            <label className="switch-row">
+              <span className="setting-copy">
+                <strong>
+                  Перемешивать варианты
+                </strong>
+
+                <span>
+                  Порядок будет разным у участников
+                </span>
+              </span>
+
+              <input
+                type="checkbox"
+                checked={
+                  shuffleOptions
+                }
+                onChange={(event) =>
+                  setShuffleOptions(
+                    event.target
+                      .checked
+                  )
+                }
+                disabled={loading}
+              />
+
+              <span className="switch" />
+            </label>
+
+            <label className="switch-row">
+              <span className="setting-copy">
+                <strong>
+                  Показывать число участников
+                </strong>
+
+                <span>
+                  Например: 24 участника
+                </span>
+              </span>
+
+              <input
+                type="checkbox"
+                checked={
+                  showParticipantCount
+                }
+                onChange={(event) =>
+                  setShowParticipantCount(
+                    event.target
+                      .checked
+                  )
+                }
+                disabled={loading}
+              />
+
+              <span className="switch" />
+            </label>
+          </div>
+        </div>
+
         <button
           type="button"
-          className={
-            shuffleOptions
-              ? "primary"
-              : "secondary"
-          }
-          onClick={() =>
-            setShuffleOptions(
-              !shuffleOptions
-            )
-          }
+          className="primary-button create-button"
+          onClick={submit}
+          disabled={loading}
         >
-          🔀 Перемешивать варианты
+          {loading
+            ? "Создаём…"
+            : "Создать голосование"}
         </button>
-      )}
-
-      <label>
-        Результаты
-      </label>
-
-      <select
-        value={
-          resultsVisibility
-        }
-        onChange={(e) =>
-          setResultsVisibility(
-            e.target
-              .value as ResultsVisibility
-          )
-        }
-      >
-        <option value="always">
-          👀 Показывать сразу
-        </option>
-
-        <option value="after_vote">
-          🔒 После голосования
-        </option>
-
-        <option value="after_expiration">
-          ⏰ После окончания
-        </option>
-      </select>
-
-      <label>
-        Изменение голоса
-      </label>
-
-      <button
-        type="button"
-        className={
-          allowRevoting
-            ? "primary"
-            : "secondary"
-        }
-        onClick={() =>
-          setAllowRevoting(
-            !allowRevoting
-          )
-        }
-      >
-        {allowRevoting
-          ? "🔄 Можно изменить"
-          : "🔒 Изменение запрещено"}
-      </button>
-
-      <label>
-        Срок голосования
-      </label>
-
-      <select
-        value={duration}
-        onChange={(e) =>
-          setDuration(
-            e.target.value
-          )
-        }
-      >
-        <option value="none">
-          ♾️ Без ограничения
-        </option>
-        <option value="1">
-          ⏱️ 1 час
-        </option>
-        <option value="6">
-          ⏱️ 6 часов
-        </option>
-        <option value="12">
-          ⏱️ 12 часов
-        </option>
-        <option value="24">
-          📅 1 день
-        </option>
-        <option value="72">
-          📅 3 дня
-        </option>
-        <option value="168">
-          📅 7 дней
-        </option>
-      </select>
-
-      <button
-        type="button"
-        className={
-          showParticipantCount
-            ? "primary"
-            : "secondary"
-        }
-        onClick={() =>
-          setShowParticipantCount(
-            !showParticipantCount
-          )
-        }
-      >
-        {showParticipantCount
-          ? "👥 Показывать участников"
-          : "🙈 Скрыть участников"}
-      </button>
-
-      <button
-        className="primary"
-        onClick={submit}
-        disabled={loading}
-        style={{
-          marginTop: 12,
-        }}
-      >
-        {loading
-          ? "Создаём..."
-          : "Создать голосование"}
-      </button>
+      </section>
     </main>
   );
 }
