@@ -70,40 +70,32 @@ export function getStartParam(): string | null {
 
 export function sharePoll(
   pollId: string,
-  title: string
+  _title: string
 ) {
-  const previewUrl =
-    `https://smartvoter-tau.vercel.app/poll/${encodeURIComponent(
+  const query =
+    `poll:${pollId}`;
+
+  const inlineUrl =
+    `https://t.me/${"smart_voter_bot"}?startapp=${encodeURIComponent(
       pollId
-    )}`;
-
-  const telegramUrl =
-    `https://t.me/smart_voter_bot?startapp=${encodeURIComponent(
-      pollId
-    )}`;
-
-  const shareText =
-    `🗳️ ${title}\n\nОткрыть голосование:`;
-
-  const shareUrl =
-    `https://t.me/share/url?url=${encodeURIComponent(
-      previewUrl
-    )}&text=${encodeURIComponent(
-      shareText
     )}`;
 
   const tg =
     window.Telegram?.WebApp;
 
-  if (tg?.openTelegramLink) {
-    tg.openTelegramLink(
-      shareUrl
+  if (tg?.switchInlineQuery) {
+    tg.switchInlineQuery(
+      query,
+      ["users", "groups"]
     );
+
     return;
   }
 
   window.open(
-    shareUrl,
+    `https://t.me/smart_voter_bot?startapp=${encodeURIComponent(
+      pollId
+    )}`,
     "_blank"
   );
 }
