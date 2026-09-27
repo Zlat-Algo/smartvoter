@@ -44,6 +44,7 @@ import type {
   VotingMethod,
   ResultsVisibility,
   ParliamentaryResults,
+  PollAccessMode,
 } from "./types/poll";
 
 export default function App() {
@@ -253,9 +254,19 @@ export default function App() {
         error
       );
 
-      alert(
-        "Не удалось открыть голосование. Возможно, оно было удалено."
-      );
+      if (
+        error instanceof Error &&
+        error.message ===
+          "NOT_CHAT_MEMBER"
+      ) {
+        alert(
+          "Это голосование доступно только участникам указанного Telegram-чата."
+        );
+      } else {
+        alert(
+          "Не удалось открыть голосование. Возможно, оно было удалено."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -272,7 +283,9 @@ export default function App() {
     maxChoices: number,
     shuffleOptions: boolean,
     showParticipantCount: boolean,
-    parliamentarySeats: number | null
+    parliamentarySeats: number | null,
+    accessMode: PollAccessMode,
+    allowedChatId: number | null
   ) {
     if (
       authenticatedUserId === null
@@ -298,7 +311,9 @@ export default function App() {
           maxChoices,
           shuffleOptions,
           showParticipantCount,
-          parliamentarySeats
+          parliamentarySeats,
+          accessMode,
+          allowedChatId
         );
 
       await openPoll(
@@ -311,9 +326,19 @@ export default function App() {
         error
       );
 
-      alert(
-        "Не удалось создать голосование."
-      );
+      if (
+        error instanceof Error &&
+        error.message ===
+          "INVALID_CHAT_ID"
+      ) {
+        alert(
+          "Укажите корректный Telegram Chat ID."
+        );
+      } else {
+        alert(
+          "Не удалось создать голосование."
+        );
+      }
     } finally {
       setLoading(false);
     }
@@ -364,6 +389,14 @@ export default function App() {
       ) {
         alert(
           "Повторное голосование отключено для этого опроса."
+        );
+      } else if (
+        error instanceof Error &&
+        error.message ===
+          "NOT_CHAT_MEMBER"
+      ) {
+        alert(
+          "Голосование доступно только участникам указанного Telegram-чата."
         );
       } else {
         alert(
@@ -421,6 +454,14 @@ export default function App() {
       ) {
         alert(
           "Повторное голосование отключено для этого опроса."
+        );
+      } else if (
+        error instanceof Error &&
+        error.message ===
+          "NOT_CHAT_MEMBER"
+      ) {
+        alert(
+          "Голосование доступно только участникам указанного Telegram-чата."
         );
       } else {
         alert(
@@ -483,6 +524,14 @@ export default function App() {
       ) {
         alert(
           "Выберите хотя бы одну партию: «За» или «Против»."
+        );
+      } else if (
+        error instanceof Error &&
+        error.message ===
+          "NOT_CHAT_MEMBER"
+      ) {
+        alert(
+          "Голосование доступно только участникам указанного Telegram-чата."
         );
       } else {
         alert(
