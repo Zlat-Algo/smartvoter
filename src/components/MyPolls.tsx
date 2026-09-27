@@ -1,302 +1,222 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
-import type {
-  Poll,
-  Screen,
-} from "../types/poll";
+import type { Poll } from "../types/poll";
 
 type Props = {
   polls: Poll[];
+  now: number;
   loading: boolean;
-  setScreen: (screen: Screen) => void;
-  openPoll: (pollId: string) => void;
-  onDeletePoll: (
+  onOpen: (
     pollId: string
-  ) => Promise<void>;
+  ) => void;
+  onDelete: (
+    pollId: string
+  ) => void;
+  onBack: () => void;
 };
 
-function getTimeText(
-  endsAt: string | null | undefined,
-  now: number
+function methodName(
+  method: string
 ) {
-  if (!endsAt) {
-    return "Без ограничения";
+  switch (method) {
+    case "plurality":
+      return "Один вариант";
+
+    case "multiple":
+      return "Несколько вариантов";
+
+    case "ranked":
+      return "Рейтинг";
+
+    case "yes_no":
+      return "Да / Нет";
+
+    case "rating":
+      return "Оценка 1–5";
+
+    default:
+      return "Голосование";
   }
-
-  const end =
-    new Date(endsAt).getTime();
-
-  const difference =
-    end - now;
-
-  if (difference <= 0) {
-    return "Голосование завершено";
-  }
-
-  const totalMinutes =
-    Math.floor(
-      difference / 60000
-    );
-
-  const days =
-    Math.floor(
-      totalMinutes / 1440
-    );
-
-  const hours =
-    Math.floor(
-      (totalMinutes % 1440) / 60
-    );
-
-  const minutes =
-    totalMinutes % 60;
-
-  if (days > 0) {
-    return `Осталось: ${days} д ${hours} ч`;
-  }
-
-  if (hours > 0) {
-    return `Осталось: ${hours} ч ${minutes} мин`;
-  }
-
-  return `Осталось: ${Math.max(
-    1,
-    minutes
-  )} мин`;
 }
 
-function isExpired(
-  endsAt: string | null | undefined,
+function status(
+  poll: Poll,
   now: number
 ) {
-  if (!endsAt) {
-    return false;
+  if (
+    poll.ends_at &&
+    new Date(
+      poll.ends_at
+    ).getTime() <= now
+  ) {
+    return "Завершено";
   }
 
-  return (
-    new Date(endsAt).getTime() <=
-    now
-  );
+  return "Активно";
 }
 
 export default function MyPolls({
   polls,
+  now,
   loading,
-  setScreen,
-  openPoll,
-  onDeletePoll,
+  onOpen,
+  onDelete,
+  onBack,
 }: Props) {
-  const [now, setNow] =
-    useState(Date.now());
-
-  useEffect(() => {
-    const timer =
-      window.setInterval(() => {
-        setNow(Date.now());
-      }, 30000);
-
-    return () =>
-      window.clearInterval(
-        timer
-      );
-  }, []);
-
-  const handleDelete =
-    async (
-      poll: Poll
-    ) => {
-      const confirmed =
-        window.confirm(
-          `Удалить голосование «${poll.title}»?\n\nЭто действие нельзя отменить.`
-        );
-
-      if (!confirmed) {
-        return;
-      }
-
-      await onDeletePoll(
-        poll.id
-      );
-    };
-
   return (
-    <main className="app">
-      <button
-        className="back"
-        onClick={() =>
-          setScreen("home")
-        }
-      >
-        ← Назад
-      </button>
+    <main className="page">
+      <div className="screen-header">
+        <button
+          className="back-button"
+          onClick={onBack}
+          disabled={loading}
+        >
+          ←
+        </button>
 
-      <h1>
-        Мои голосования
-      </h1>
+        <div className="screen-header-title">
+          Мои голосования
+        </div>
 
-      {loading && (
-        <p className="subtitle">
-          Загружаем...
-        </p>
-      )}
-
-      {!loading &&
-        polls.length === 0 && (
-          <p className="subtitle">
-            У тебя пока нет
-            созданных голосований.
-          </p>
-        )}
-
-      <div
-        style={{
-          display: "flex",
-          flexDirection:
-            "column",
-          gap: 12,
-          marginTop: 16,
-        }}
-      >
-        {polls.map(
-          (poll) => {
-            const expired =
-              isExpired(
-                poll.ends_at,
-                now
-              );
-
-            return (
-              <div
-                key={poll.id}
-                className="poll-card"
-                style={{
-                  position:
-                    "relative",
-                  opacity:
-                    expired ? 0.72 : 1,
-                  border:
-                    expired
-                      ? "1px solid rgba(255, 90, 90, 0.45)"
-                      : undefined,
-                }}
-              >
-                <button
-                  className="poll-card-open"
-                  onClick={() =>
-                    openPoll(
-                      poll.id
-                    )
-                  }
-                  style={{
-                    width: "100%",
-                    textAlign:
-                      "left",
-                    background:
-                      "transparent",
-                    border: "none",
-                    padding: 0,
-                    color:
-                      "inherit",
-                    cursor:
-                      "pointer",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontWeight:
-                        700,
-                      fontSize:
-                        17,
-                      paddingRight:
-                        45,
-                    }}
-                  >
-                    {poll.title}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontSize:
-                        14,
-                      opacity:
-                        0.75,
-                    }}
-                  >
-                    {poll.voting_method ===
-                    "ranked"
-                      ? "🏆 Ранжирование"
-                      : "🗳️ Обычное"}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 6,
-                      fontSize:
-                        14,
-                    }}
-                  >
-                    👥 Участников:{" "}
-                    {poll.participant_count ??
-                      0}
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 6,
-                      fontSize:
-                        14,
-                      fontWeight:
-                        expired
-                          ? 600
-                          : 500,
-                    }}
-                  >
-                    {expired
-                      ? "🔴 Голосование завершено"
-                      : `⏳ ${getTimeText(
-                          poll.ends_at,
-                          now
-                        )}`}
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() =>
-                    handleDelete(
-                      poll
-                    )
-                  }
-                  aria-label="Удалить голосование"
-                  style={{
-                    position:
-                      "absolute",
-                    top: 10,
-                    right: 10,
-                    width: 34,
-                    height: 34,
-                    border: "none",
-                    borderRadius:
-                      10,
-                    background:
-                      "rgba(255, 80, 80, 0.12)",
-                    cursor:
-                      "pointer",
-                    fontSize:
-                      17,
-                  }}
-                >
-                  🗑️
-                </button>
-              </div>
-            );
-          }
-        )}
+        <div className="header-spacer" />
       </div>
+
+      <section className="my-polls-content">
+        <div className="my-polls-intro">
+          <div>
+            <div className="eyebrow">
+              ВАШИ ОПРОСЫ
+            </div>
+
+            <h1>
+              Все голосования
+            </h1>
+
+            <p>
+              Открывайте, делитесь
+              или удаляйте созданные
+              вами опросы.
+            </p>
+          </div>
+
+          <div className="poll-count-big">
+            {polls.length}
+          </div>
+        </div>
+
+        {polls.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              🗳️
+            </div>
+
+            <h2>
+              Пока ничего нет
+            </h2>
+
+            <p>
+              Создайте первое
+              голосование, чтобы оно
+              появилось здесь.
+            </p>
+          </div>
+        ) : (
+          <div className="my-polls-list">
+            {polls.map(
+              (poll) => (
+                <article
+                  className="my-poll-card"
+                  key={poll.id}
+                >
+                  <button
+                    type="button"
+                    className="my-poll-main"
+                    onClick={() =>
+                      onOpen(
+                        poll.id
+                      )
+                    }
+                    disabled={
+                      loading
+                    }
+                  >
+                    <div className="my-poll-card-top">
+                      <span className="poll-mini-icon">
+                        🗳️
+                      </span>
+
+                      <span
+                        className={`status-badge ${
+                          status(
+                            poll,
+                            now
+                          ) ===
+                          "Активно"
+                            ? "active"
+                            : "finished"
+                        }`}
+                      >
+                        {status(
+                          poll,
+                          now
+                        )}
+                      </span>
+                    </div>
+
+                    <h2 className="my-poll-title">
+                      {poll.title}
+                    </h2>
+
+                    {poll.description && (
+                      <p className="my-poll-description">
+                        {
+                          poll.description
+                        }
+                      </p>
+                    )}
+
+                    <div className="my-poll-meta">
+                      <span>
+                        {
+                          methodName(
+                            poll.voting_method
+                          )
+                        }
+                      </span>
+
+                      <span>
+                        👥{" "}
+                        {
+                          poll.participant_count ??
+                          0
+                        }
+                      </span>
+
+                      <span>
+                        Открыть →
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    className="delete-poll-button"
+                    onClick={() =>
+                      onDelete(
+                        poll.id
+                      )
+                    }
+                    disabled={
+                      loading
+                    }
+                    aria-label="Удалить голосование"
+                  >
+                    🗑️
+                  </button>
+                </article>
+              )
+            )}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
