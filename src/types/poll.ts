@@ -17,11 +17,6 @@ export type ResultsVisibility =
   | "after_vote"
   | "after_expiration";
 
-export type ParliamentaryStance =
-  | "for"
-  | "against"
-  | "none";
-
 export type PollOption = {
   id: string;
   text: string;
@@ -30,8 +25,10 @@ export type PollOption = {
 
 export type Poll = {
   id: string;
+
   title: string;
   description: string;
+
   voting_method: VotingMethod | string;
 
   creator_telegram_id: number | null;
@@ -50,13 +47,18 @@ export type Poll = {
 
   show_participant_count: boolean;
 
+  participant_count?: number;
+
   parliamentary_seats: number | null;
 
-  participant_count?: number;
+  access_mode: "public" | "chat_members";
+
+  allowed_chat_id: number | null;
 };
 
-export type ParliamentaryResult = {
+export type ParliamentaryResults = {
+  seats: number;
   allocation: string[];
-  counts: Record<string, number>;
+  seatCounts: Record<string, number>;
   participantCount: number;
 };
