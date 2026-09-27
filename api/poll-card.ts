@@ -6,6 +6,7 @@ import type {
 import sharp from "sharp";
 import fs from "fs";
 import path from "path";
+import { Resvg } from "@resvg/resvg-js";
 
 const SUPABASE_URL =
   process.env.VITE_SUPABASE_URL;
@@ -13,13 +14,6 @@ const SUPABASE_URL =
 const SUPABASE_KEY =
   process.env.VITE_SUPABASE_KEY;
 
-/*
- * Реально загружаем TTF из репозитория.
- *
- * Файл должен находиться здесь:
- *
- * api/fonts/DejaVuSans.ttf
- */
 const FONT_PATH =
   path.join(
     process.cwd(),
@@ -55,26 +49,16 @@ type ParliamentaryVote = {
   stance: "for" | "against";
 };
 
-function escapeXml(
-  value: string
-) {
+function escapeXml(value: string) {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
-    .replace(
-      /"/g,
-      "&quot;"
-    )
-    .replace(
-      /'/g,
-      "&apos;"
-    );
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
-function partyColor(
-  index: number
-) {
+function partyColor(index: number) {
   return `hsl(${(
     (index * 137.508) %
     360
@@ -85,26 +69,22 @@ async function supabaseGet<T>(
   table: string,
   query: string
 ): Promise<T[]> {
-  if (
-    !SUPABASE_URL ||
-    !SUPABASE_KEY
-  ) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
       "SUPABASE_ENV_MISSING"
     );
   }
 
-  const response =
-    await fetch(
-      `${SUPABASE_URL}/rest/v1/${table}?${query}`,
-      {
-        headers: {
-          apikey: SUPABASE_KEY,
-          Authorization:
-            `Bearer ${SUPABASE_KEY}`,
-        },
-      }
-    );
+  const response = await fetch(
+    `${SUPABASE_URL}/rest/v1/${table}?${query}`,
+    {
+      headers: {
+        apikey: SUPABASE_KEY,
+        Authorization:
+          `Bearer ${SUPABASE_KEY}`,
+      },
+    }
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -115,9 +95,7 @@ async function supabaseGet<T>(
   return response.json();
 }
 
-async function getPoll(
-  pollId: string
-) {
+async function getPoll(pollId: string) {
   const polls =
     await supabaseGet<Poll>(
       "polls",
@@ -155,18 +133,15 @@ async function getNormalResults(
       )}`
     );
 
-  const counts: Record<
-    string,
-    number
-  > = {};
+  const counts: Record<string, number> =
+    {};
 
   const participants =
     new Set<number>();
 
   for (const vote of votes) {
     counts[vote.option_id] =
-      (counts[vote.option_id] ?? 0) +
-      1;
+      (counts[vote.option_id] ?? 0) + 1;
 
     participants.add(
       vote.telegram_user_id
@@ -209,10 +184,8 @@ async function getParliamentaryResults(
 
     if (!user) {
       user = {
-        forIds:
-          new Set<string>(),
-        againstIds:
-          new Set<string>(),
+        forIds: new Set<string>(),
+        againstIds: new Set<string>(),
       };
 
       users.set(
@@ -221,9 +194,7 @@ async function getParliamentaryResults(
       );
     }
 
-    if (
-      vote.stance === "for"
-    ) {
+    if (vote.stance === "for") {
       user.forIds.add(
         vote.option_id
       );
@@ -252,15 +223,10 @@ async function getParliamentaryResults(
       | string
       | null = null;
 
-    let bestScore =
-      -Infinity;
+    let bestScore = -Infinity;
+    let bestPosition = Infinity;
 
-    let bestPosition =
-      Infinity;
-
-    for (
-      const option of options
-    ) {
+    for (const option of options) {
       let score = 0;
 
       for (
@@ -319,9 +285,7 @@ async function getParliamentaryResults(
             seats -
             opposedSeats;
 
-          if (
-            denominator > 0
-          ) {
+          if (denominator > 0) {
             score +=
               -1 /
               denominator;
@@ -338,20 +302,16 @@ async function getParliamentaryResults(
         )
       ) {
         bestScore = score;
-        bestOptionId =
-          option.id;
+        bestOptionId = option.id;
         bestPosition =
           option.position;
       }
     }
 
     if (bestOptionId) {
-      seatCounts[
-        bestOptionId
-      ] =
-        (seatCounts[
-          bestOptionId
-        ] ?? 0) + 1;
+      seatCounts[bestOptionId] =
+        (seatCounts[bestOptionId] ?? 0) +
+        1;
     }
   }
 
@@ -366,10 +326,7 @@ function wrapText(
   text: string,
   maxLength: number
 ) {
-  if (
-    text.length <=
-    maxLength
-  ) {
+  if (text.length <= maxLength) {
     return [text];
   }
 
@@ -377,12 +334,9 @@ function wrapText(
     text.split(/\s+/);
 
   const lines: string[] = [];
-
   let current = "";
 
-  for (
-    const word of words
-  ) {
+  for (const word of words) {
     const candidate =
       current
         ? `${current} ${word}`
@@ -393,55 +347,20 @@ function wrapText(
       maxLength
     ) {
       if (current) {
-        lines.push(
-          current
-        );
+        lines.push(current);
       }
 
       current = word;
     } else {
-      current =
-        candidate;
+      current = candidate;
     }
   }
 
   if (current) {
-    lines.push(
-      current
-    );
+    lines.push(current);
   }
 
-  return lines.slice(
-    0,
-    3
-  );
-}
-
-/*
- * Читаем TTF и превращаем его в Base64.
- *
- * Благодаря этому SVG получает настоящий файл
- * шрифта, а не просто название системного шрифта.
- */
-function getEmbeddedFont() {
-  if (
-    !fs.existsSync(
-      FONT_PATH
-    )
-  ) {
-    throw new Error(
-      `FONT_NOT_FOUND: ${FONT_PATH}`
-    );
-  }
-
-  const fontBuffer =
-    fs.readFileSync(
-      FONT_PATH
-    );
-
-  return fontBuffer.toString(
-    "base64"
-  );
+  return lines.slice(0, 3);
 }
 
 function buildSvg(
@@ -451,21 +370,13 @@ function buildSvg(
     counts?: Record<string, number>;
     seatCounts?: Record<string, number>;
     participantCount: number;
-  } | null,
-  fontBase64: string
+  } | null
 ) {
   const width = 1200;
   const height = 675;
 
-  /*
-   * ВАЖНО:
-   * Этот шрифт не предполагается установленным
-   * на сервере Vercel.
-   *
-   * Он встроен непосредственно в SVG.
-   */
   const fontFamily =
-    "SmartVoterFont";
+    "DejaVu Sans";
 
   const titleLines =
     wrapText(
@@ -480,8 +391,7 @@ function buildSvg(
         (
           line,
           index
-        ) =>
-          `
+        ) => `
           <text
             x="70"
             y="${115 + index * 54}"
@@ -490,11 +400,9 @@ function buildSvg(
             font-weight="800"
             fill="#17191d"
           >
-            ${escapeXml(
-              line
-            )}
+            ${escapeXml(line)}
           </text>
-          `
+        `
       )
       .join("");
 
@@ -525,8 +433,7 @@ function buildSvg(
     const gap = 4;
     const maxPerRow = 48;
 
-    const seats: string[] =
-      [];
+    const seats: string[] = [];
 
     for (
       const option of sorted
@@ -569,20 +476,16 @@ function buildSvg(
           row *
             (squareSize + gap);
 
-        seats.push(
-          `
+        seats.push(`
           <rect
             x="${sx}"
             y="${sy}"
             width="${squareSize}"
             height="${squareSize}"
             rx="4"
-            fill="${partyColor(
-              index
-            )}"
+            fill="${partyColor(index)}"
           />
-          `
-        );
+        `);
       }
     }
 
@@ -600,8 +503,7 @@ function buildSvg(
             poll.parliamentary_seats ??
               450
           )
-        )} мест
-        ${
+        )} мест${
           poll.show_participant_count
             ? ` · ${results.participantCount} участников`
             : ""
@@ -706,9 +608,7 @@ function buildSvg(
                 width="18"
                 height="18"
                 rx="5"
-                fill="${partyColor(
-                  index
-                )}"
+                fill="${partyColor(index)}"
               />
 
               <text
@@ -743,16 +643,6 @@ function buildSvg(
     >
 
       <defs>
-
-        <style>
-          @font-face {
-            font-family: "${fontFamily}";
-            src: url("data:font/ttf;base64,${fontBase64}") format("truetype");
-            font-weight: 100 900;
-            font-style: normal;
-          }
-        </style>
-
         <linearGradient
           id="background"
           x1="0"
@@ -770,7 +660,6 @@ function buildSvg(
             stop-color="#ffffff"
           />
         </linearGradient>
-
       </defs>
 
       <rect
@@ -816,9 +705,7 @@ function buildSvg(
         font-weight="700"
         fill="#70757d"
       >
-        ${escapeXml(
-          badge
-        )}
+        ${escapeXml(badge)}
       </text>
 
       ${titleSvg}
@@ -855,7 +742,6 @@ export default async function handler(
       res.status(400).send(
         "Missing poll id"
       );
-
       return;
     }
 
@@ -868,7 +754,6 @@ export default async function handler(
       res.status(404).send(
         "Poll not found"
       );
-
       return;
     }
 
@@ -910,25 +795,49 @@ export default async function handler(
       }
     }
 
-    /*
-     * Загружаем настоящий TTF.
-     * Если GitHub/Vercel не включил файл,
-     * здесь сразу будет понятная ошибка.
-     */
-    const fontBase64 =
-      getEmbeddedFont();
+    if (
+      !fs.existsSync(
+        FONT_PATH
+      )
+    ) {
+      throw new Error(
+        `FONT_NOT_FOUND: ${FONT_PATH}`
+      );
+    }
 
     const svg =
       buildSvg(
         poll,
         options,
-        results,
-        fontBase64
+        results
       );
+
+    const renderer =
+      new Resvg(
+        svg,
+        {
+          font: {
+            fontFiles: [
+              FONT_PATH,
+            ],
+            loadSystemFonts:
+              false,
+            defaultFontFamily:
+              "DejaVu Sans",
+            sansSerifFamily:
+              "DejaVu Sans",
+          },
+        }
+      );
+
+    const png =
+      renderer
+        .render()
+        .asPng();
 
     const jpeg =
       await sharp(
-        Buffer.from(svg)
+        png
       )
         .jpeg({
           quality: 90,
