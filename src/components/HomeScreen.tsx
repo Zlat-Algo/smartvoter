@@ -1,42 +1,47 @@
-import type { Screen } from "../types/poll";
-
 type Props = {
   telegramName: string;
-  loading: boolean;
-  setScreen: (screen: Screen) => void;
-  loadMyPolls: () => void;
+  onCreate: () => void;
+  onMyPolls: () => void;
+  loading?: boolean;
 };
 
 export default function HomeScreen({
   telegramName,
-  loading,
-  setScreen,
-  loadMyPolls,
+  onCreate,
+  onMyPolls,
+  loading = false,
 }: Props) {
   return (
     <main className="app">
-      <div className="logo">🗳️</div>
+      <div className="logo">
+        🗳️
+      </div>
 
-      <h1>SmartVoter</h1>
+      <h1>
+        SmartVoter
+      </h1>
 
       <p className="subtitle">
-        Привет, {telegramName}! Создавай голосования
-        с продвинутыми способами подсчёта голосов.
+        Привет, {telegramName}! Создавай
+        голосования с продвинутыми способами
+        подсчёта голосов.
       </p>
 
       <button
         className="primary"
-        onClick={() => setScreen("create")}
+        onClick={onCreate}
       >
         Создать голосование
       </button>
 
       <button
         className="secondary"
-        onClick={loadMyPolls}
+        onClick={onMyPolls}
         disabled={loading}
       >
-        {loading ? "Загружаем..." : "Мои голосования"}
+        {loading
+          ? "Загружаем..."
+          : "Мои голосования"}
       </button>
     </main>
   );
