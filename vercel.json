@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/poll/:id",
+      "destination": "/api/poll-preview?id=:id"
+    }
+  ]
+}
